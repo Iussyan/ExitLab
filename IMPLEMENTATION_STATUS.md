@@ -43,6 +43,8 @@
 - 2026-10-29: Milestone 1: Zod building schema, validation rules, 4 architectural fixtures, discrete 0.25m navigation grid, multi-source Dijkstra pathfinding, deterministic simulation engine with door flow capacity and collision queueing, and Vitest test suite.
 - 2026-10-29: Milestone 2: Guarded tool execution (`tools.ts`), Meta AI stress orchestrator (`orchestrator.ts`), equal-budget AI-vs-Random benchmark (`benchmark.ts`), and Express server (`server/index.ts`).
 - 2026-10-29: Milestone 3: Hybrid UI/UX design system, 2D Floor Plan Editor with real-time blockage toggles, 3D Cutaway Replay Workspace with scrubbable timeline, AI activity trace panel, Results & bottleneck table, Import & calibration wizard, and Printable report export.
+- 2026-10-29: PostCSS and Tailwind CSS v3 configuration for modern design system rendering.
+- 2026-10-29: Installed project-specific workspace skills in `.agents/skills/`: `exitlab-simulation`, `exitlab-meta-agent`, and `exitlab-geometry-pipeline`.
 
 ## Next Smallest Vertical Slice / Remaining Work
 1. P1 Enhancements:
