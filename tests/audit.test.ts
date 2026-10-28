@@ -304,6 +304,58 @@ describe('Comprehensive Component & Flow Audit', () => {
       }
     }
   });
+
+  it('audits dynamic CAD wall drawing, door insertion, and simulation execution', () => {
+    const base = simpleSchool as unknown as Building;
+
+    // Simulate user drawing a new dividing wall at x = 12.0 from y = 0.1 to y = 5.0
+    const newWallId = 'w-custom-partition';
+    const newWall = {
+      id: newWallId,
+      start: { x: 12.0, y: 0.1 },
+      end: { x: 12.0, y: 5.0 },
+      thicknessM: 0.2,
+      heightM: 2.8,
+    };
+
+    // User inserts a new interior door on the custom wall
+    const newDoorId = 'd-custom-pass';
+    const newDoor = {
+      id: newDoorId,
+      wallId: newWallId,
+      offsetM: 2.0,
+      widthM: 1.0,
+      passable: true,
+      kind: 'interior' as const,
+    };
+
+    const modifiedBuilding: Building = {
+      ...base,
+      floors: [
+        {
+          ...base.floors[0],
+          walls: [...base.floors[0].walls, newWall],
+          doors: [...base.floors[0].doors, newDoor],
+        },
+      ] as [typeof base.floors[0]],
+    };
+
+    // Verify building passes geometry validation
+    const val = validateBuildingGeometry(modifiedBuilding);
+    expect(val.valid).toBe(true);
+
+    // Verify simulation runs cleanly with the user's custom wall and door
+    const run = runSimulation(modifiedBuilding, {
+      id: 'custom-cad-run',
+      name: 'Custom CAD Run',
+      seed: 42,
+      blockedDoorIds: [],
+    });
+
+    expect(run.metrics.totalSpawned).toBe(78);
+    expect(run.metrics.exitedCount).toBe(78);
+    expect(run.metrics.completed).toBe(true);
+  });
 });
 
 

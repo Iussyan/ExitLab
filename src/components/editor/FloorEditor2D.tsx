@@ -1,25 +1,29 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import {
-  DoorClosed,
+  MousePointer,
+  Pencil,
   DoorOpen,
+  LogOut,
+  Trash2,
+  Undo2,
+  ZoomIn,
+  ZoomOut,
+  Layers,
+  Sliders,
   AlertTriangle,
   Play,
   RotateCcw,
-  Sparkles,
-  Info,
-  Layers,
-  ZoomIn,
-  ZoomOut,
-  ChevronRight,
-  ChevronLeft,
-  Sliders,
+  CheckCircle2,
   Users,
-  Eye,
-  CheckCircle2
+  X,
+  Plus,
+  Minus
 } from 'lucide-react';
 import { useProject } from '../../context/ProjectContext';
 import { pointToSegment, isPointInPolygon } from '../../simulation/navgrid';
-import { Door, Room, Wall } from '../../schemas/building';
+import { Door, Room, Wall, Building } from '../../schemas/building';
+
+export type EditorMode = 'select' | 'draw-wall' | 'insert-door' | 'insert-exit' | 'delete';
 
 export const FloorEditor2D: React.FC = () => {
   const {
@@ -38,22 +42,43 @@ export const FloorEditor2D: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  // Tool Modes & Selection State
+  const [editorMode, setEditorMode] = useState<EditorMode>('select');
   const [selectedDoorId, setSelectedDoorId] = useState<string | null>(null);
+  const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [hoveredDoorId, setHoveredDoorId] = useState<string | null>(null);
+  const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
+
+  // Drawing & Snapping State
+  const [drawingStart, setDrawingStart] = useState<{ x: number; y: number } | null>(null);
+  const [mouseWorld, setMouseWorld] = useState<{ x: number; y: number } | null>(null);
+  const [snappedPos, setSnappedPos] = useState<{ x: number; y: number; isVertex: boolean } | null>(null);
+  const [doorPreview, setDoorPreview] = useState<{
+    wall: Wall;
+    offsetM: number;
+    widthM: number;
+    isExit: boolean;
+  } | null>(null);
+
+  // History Stack for Undo
+  const [history, setHistory] = useState<Building[]>([]);
+
+  // Viewport Settings
   const [zoom, setZoom] = useState<number>(1.0);
   const [showOccupants, setShowOccupants] = useState<boolean>(true);
   const [inspectorOpen, setInspectorOpen] = useState<boolean>(true);
+  const [gridSnapStep, setGridSnapStep] = useState<number>(0.5);
 
   const floor = building.floors[0];
 
-  // Store transform params so mouse event handlers have exact screen-to-world mapping
+  // Transform parameters for screen-to-world mapping
   const transformRef = useRef({
     baseScale: 30,
     offsetX: 40,
     offsetY: 40,
-    canvasWidth: 1000,
-    canvasHeight: 650,
+    cssWidth: 1000,
+    cssHeight: 650,
   });
 
   // Calculate building geometric bounds
@@ -81,58 +106,299 @@ export const FloorEditor2D: React.FC = () => {
     return { minX, minY, maxX, maxY };
   }, [floor]);
 
-  // Redraw canvas
+  // Push current state to undo history before making mutations
+  const pushHistory = useCallback(() => {
+    setHistory(prev => [...prev.slice(-15), building]);
+  }, [building]);
+
+  const handleUndo = useCallback(() => {
+    if (history.length === 0) return;
+    const previous = history[history.length - 1];
+    setHistory(prev => prev.slice(0, -1));
+    setBuilding(previous);
+    setSelectedDoorId(null);
+    setSelectedWallId(null);
+    setSelectedRoomId(null);
+    setDrawingStart(null);
+  }, [history, setBuilding]);
+
+  // Convert canvas mouse event to world meters (x, y)
+  const getEventWorldCoords = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+
+    const { baseScale, offsetX, offsetY } = transformRef.current;
+    const worldX = (screenX - offsetX) / baseScale;
+    const worldY = (screenY - offsetY) / baseScale;
+    return { worldX, worldY };
+  }, []);
+
+  // Geometric snap function: snaps to nearest vertex or orthogonal angle
+  const calculateSnap = useCallback(
+    (rawX: number, rawY: number, startPt: { x: number; y: number } | null) => {
+      if (!floor) return { x: rawX, y: rawY, isVertex: false };
+
+      // 1. Vertex snap: check existing wall start/end vertices within 0.35m
+      for (const w of floor.walls) {
+        for (const v of [w.start, w.end]) {
+          const dist = Math.hypot(rawX - v.x, rawY - v.y);
+          if (dist < 0.35) {
+            return { x: v.x, y: v.y, isVertex: true };
+          }
+        }
+      }
+
+      // 2. Grid snap
+      let sx = Math.round(rawX / gridSnapStep) * gridSnapStep;
+      let sy = Math.round(rawY / gridSnapStep) * gridSnapStep;
+
+      // 3. Orthogonal lock if drawing from a start point
+      if (startPt) {
+        const dx = Math.abs(rawX - startPt.x);
+        const dy = Math.abs(rawY - startPt.y);
+        if (dy < 0.4 || dy / (dx + 1e-4) < 0.25) {
+          sy = startPt.y; // horizontal lock
+        } else if (dx < 0.4 || dx / (dy + 1e-4) < 0.25) {
+          sx = startPt.x; // vertical lock
+        }
+      }
+
+      return {
+        x: parseFloat(sx.toFixed(2)),
+        y: parseFloat(sy.toFixed(2)),
+        isVertex: false,
+      };
+    },
+    [floor, gridSnapStep]
+  );
+
+  // Find door hit near coordinates
+  const findDoorAtCoords = useCallback(
+    (wx: number, wy: number): Door | null => {
+      if (!floor) return null;
+      for (const door of floor.doors) {
+        const wall = floor.walls.find(w => w.id === door.wallId);
+        if (!wall) continue;
+
+        const dx = wall.end.x - wall.start.x;
+        const dy = wall.end.y - wall.start.y;
+        const wallLen = Math.hypot(dx, dy);
+        if (wallLen < 1e-4) continue;
+
+        const ux = dx / wallLen;
+        const uy = dy / wallLen;
+
+        const dStart = {
+          x: wall.start.x + ux * door.offsetM,
+          y: wall.start.y + uy * door.offsetM,
+        };
+        const dEnd = {
+          x: wall.start.x + ux * (door.offsetM + door.widthM),
+          y: wall.start.y + uy * (door.offsetM + door.widthM),
+        };
+
+        const { dist } = pointToSegment({ x: wx, y: wy }, dStart, dEnd);
+        if (dist <= 0.8) return door;
+      }
+      return null;
+    },
+    [floor]
+  );
+
+  // Find wall hit near coordinates
+  const findWallAtCoords = useCallback(
+    (wx: number, wy: number): Wall | null => {
+      if (!floor) return null;
+      let bestWall: Wall | null = null;
+      let bestDist = Infinity;
+
+      for (const wall of floor.walls) {
+        const { dist } = pointToSegment({ x: wx, y: wy }, wall.start, wall.end);
+        if (dist <= 0.4 && dist < bestDist) {
+          bestWall = wall;
+          bestDist = dist;
+        }
+      }
+      return bestWall;
+    },
+    [floor]
+  );
+
+  // Compute door insertion preview on wall
+  const computeDoorPlacement = useCallback(
+    (wx: number, wy: number, isExit: boolean) => {
+      if (!floor) return null;
+      const targetWall = findWallAtCoords(wx, wy);
+      if (!targetWall) return null;
+
+      const { offsetAlongSegment, segLength } = pointToSegment(
+        { x: wx, y: wy },
+        targetWall.start,
+        targetWall.end
+      );
+
+      const doorWidth = isExit ? 1.5 : 1.0;
+      const maxOffset = segLength - doorWidth - 0.1;
+      if (maxOffset < 0.1) return null; // Wall too short for door
+
+      const clampedOffset = Math.max(0.1, Math.min(maxOffset, offsetAlongSegment - doorWidth / 2));
+
+      return {
+        wall: targetWall,
+        offsetM: parseFloat(clampedOffset.toFixed(2)),
+        widthM: doorWidth,
+        isExit,
+      };
+    },
+    [floor, findWallAtCoords]
+  );
+
+  // Keyboard navigation & tool shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      if (e.key === 'Escape') {
+        setEditorMode('select');
+        setDrawingStart(null);
+        setSelectedDoorId(null);
+        setSelectedWallId(null);
+        setSelectedRoomId(null);
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedWallId || selectedDoorId) {
+          handleDeleteSelected();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        handleUndo();
+      } else if (e.key.toLowerCase() === 'w') {
+        setEditorMode('draw-wall');
+        setDrawingStart(null);
+      } else if (e.key.toLowerCase() === 'd') {
+        setEditorMode('insert-door');
+      } else if (e.key.toLowerCase() === 'e') {
+        setEditorMode('insert-exit');
+      } else if (e.key.toLowerCase() === 'v') {
+        setEditorMode('select');
+        setDrawingStart(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  });
+
+  // Delete currently selected wall or door
+  const handleDeleteSelected = useCallback(() => {
+    if (!floor) return;
+
+    if (selectedWallId) {
+      pushHistory();
+      const wallToDelete = selectedWallId;
+      const doorsToRemove = new Set(
+        floor.doors.filter(d => d.wallId === wallToDelete).map(d => d.id)
+      );
+      const updatedWalls = floor.walls.filter(w => w.id !== wallToDelete);
+      const updatedDoors = floor.doors.filter(d => !doorsToRemove.has(d.id));
+      const updatedExits = floor.exits.filter(e => !doorsToRemove.has(e.doorId));
+
+      setBuilding({
+        ...building,
+        floors: [
+          {
+            ...floor,
+            walls: updatedWalls,
+            doors: updatedDoors,
+            exits: updatedExits,
+          },
+        ] as [typeof floor],
+      });
+      setSelectedWallId(null);
+    } else if (selectedDoorId) {
+      pushHistory();
+      const doorToDelete = selectedDoorId;
+      const updatedDoors = floor.doors.filter(d => d.id !== doorToDelete);
+      const updatedExits = floor.exits.filter(e => e.doorId !== doorToDelete);
+
+      setBuilding({
+        ...building,
+        floors: [
+          {
+            ...floor,
+            doors: updatedDoors,
+            exits: updatedExits,
+          },
+        ] as [typeof floor],
+      });
+      setSelectedDoorId(null);
+    }
+  }, [floor, selectedWallId, selectedDoorId, building, pushHistory, setBuilding]);
+
+  // Main Canvas Render Loop (High-DPI Retina Scaled)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !floor) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const width = canvas.width;
-    const height = canvas.height;
-    ctx.clearRect(0, 0, width, height);
+    // Retina High-DPI support
+    const dpr = window.devicePixelRatio || 1;
+    const cssWidth = canvas.clientWidth || 1050;
+    const cssHeight = canvas.clientHeight || 660;
+
+    if (canvas.width !== cssWidth * dpr || canvas.height !== cssHeight * dpr) {
+      canvas.width = cssWidth * dpr;
+      canvas.height = cssHeight * dpr;
+    }
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
 
     const { minX, minY, maxX, maxY } = bounds;
     const bWidth = Math.max(1, maxX - minX + 2);
     const bHeight = Math.max(1, maxY - minY + 2);
 
-    const scaleX = (width - 80) / bWidth;
-    const scaleY = (height - 80) / bHeight;
+    const scaleX = (cssWidth - 80) / bWidth;
+    const scaleY = (cssHeight - 80) / bHeight;
     const baseScale = Math.min(scaleX, scaleY) * zoom;
 
-    const offsetX = (width - bWidth * baseScale) / 2 - (minX - 1) * baseScale;
-    const offsetY = (height - bHeight * baseScale) / 2 - (minY - 1) * baseScale;
+    const offsetX = (cssWidth - bWidth * baseScale) / 2 - (minX - 1) * baseScale;
+    const offsetY = (cssHeight - bHeight * baseScale) / 2 - (minY - 1) * baseScale;
 
     transformRef.current = {
       baseScale,
       offsetX,
       offsetY,
-      canvasWidth: width,
-      canvasHeight: height,
+      cssWidth,
+      cssHeight,
     };
 
     const toScreenX = (wx: number) => offsetX + wx * baseScale;
     const toScreenY = (wy: number) => offsetY + wy * baseScale;
     const toScreenDist = (m: number) => m * baseScale;
 
-    // Draw background 1m grid
+    // 1. Draw Architectural 1m Grid
     ctx.strokeStyle = '#f1f5f9';
     ctx.lineWidth = 1;
-    for (let x = Math.floor(minX - 1); x <= Math.ceil(maxX + 1); x += 1) {
+    for (let x = Math.floor(minX - 2); x <= Math.ceil(maxX + 2); x += 1) {
       ctx.beginPath();
       ctx.moveTo(toScreenX(x), 0);
-      ctx.lineTo(toScreenX(x), height);
+      ctx.lineTo(toScreenX(x), cssHeight);
       ctx.stroke();
     }
-    for (let y = Math.floor(minY - 1); y <= Math.ceil(maxY + 1); y += 1) {
+    for (let y = Math.floor(minY - 2); y <= Math.ceil(maxY + 2); y += 1) {
       ctx.beginPath();
       ctx.moveTo(0, toScreenY(y));
-      ctx.lineTo(width, toScreenY(y));
+      ctx.lineTo(cssWidth, toScreenY(y));
       ctx.stroke();
     }
 
-    // 1. Draw Rooms
-    floor.rooms.forEach((room, idx) => {
+    // 2. Draw Rooms
+    floor.rooms.forEach(room => {
       if (room.outline.length < 3) return;
       const isSelected = selectedRoomId === room.id;
 
@@ -143,59 +409,58 @@ export const FloorEditor2D: React.FC = () => {
       }
       ctx.closePath();
 
-      // Room fill tint
-      if (isSelected) {
-        ctx.fillStyle = '#eff6ff';
-      } else {
-        const tints = ['#f8fafc', '#f1f5f9', '#f8fafc', '#f3f4f6'];
-        ctx.fillStyle = tints[idx % tints.length];
-      }
+      ctx.fillStyle = isSelected ? 'rgba(49, 92, 250, 0.12)' : 'rgba(248, 250, 252, 0.75)';
       ctx.fill();
-
       ctx.strokeStyle = isSelected ? '#315CFA' : '#cbd5e1';
-      ctx.lineWidth = isSelected ? 2.5 : 1.5;
-      ctx.setLineDash(isSelected ? [] : [4, 4]);
+      ctx.lineWidth = isSelected ? 2 : 1;
       ctx.stroke();
-      ctx.setLineDash([]);
 
-      // Label & Occupant count
-      const centerX = room.outline.reduce((acc, p) => acc + p.x, 0) / room.outline.length;
-      const centerY = room.outline.reduce((acc, p) => acc + p.y, 0) / room.outline.length;
-      ctx.fillStyle = isSelected ? '#1e40af' : '#475569';
-      ctx.font = '600 12px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(room.name, toScreenX(centerX), toScreenY(centerY) - 8);
-
-      ctx.font = '500 11px Inter, sans-serif';
-      ctx.fillStyle = isSelected ? '#2563eb' : '#64748b';
-      ctx.fillText(`${room.occupants} occupants`, toScreenX(centerX), toScreenY(centerY) + 10);
-    });
-
-    // 2. Draw Obstacles
-    floor.obstacles.forEach(obs => {
-      if (obs.outline.length < 3) return;
-      ctx.beginPath();
-      ctx.moveTo(toScreenX(obs.outline[0].x), toScreenY(obs.outline[0].y));
-      for (let i = 1; i < obs.outline.length; i++) {
-        ctx.lineTo(toScreenX(obs.outline[i].x), toScreenY(obs.outline[i].y));
+      // Room Center Label
+      let sumX = 0, sumY = 0;
+      for (const p of room.outline) {
+        sumX += p.x;
+        sumY += p.y;
       }
-      ctx.closePath();
-      ctx.fillStyle = '#94a3b8';
-      ctx.fill();
-      ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      const cx = sumX / room.outline.length;
+      const cy = sumY / room.outline.length;
+
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 11px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(room.name, toScreenX(cx), toScreenY(cy) - 8);
+
+      ctx.fillStyle = '#64748b';
+      ctx.font = '600 10px Inter, sans-serif';
+      ctx.fillText(`${room.occupants} occupants`, toScreenX(cx), toScreenY(cy) + 8);
     });
 
     // 3. Draw Solid Walls
     floor.walls.forEach(wall => {
+      const isSelected = selectedWallId === wall.id;
+      const isHovered = hoveredWallId === wall.id;
+
       ctx.beginPath();
       ctx.moveTo(toScreenX(wall.start.x), toScreenY(wall.start.y));
       ctx.lineTo(toScreenX(wall.end.x), toScreenY(wall.end.y));
+
       ctx.lineWidth = Math.max(3, toScreenDist(wall.thicknessM));
-      ctx.strokeStyle = '#1e293b';
+      ctx.strokeStyle = isSelected ? '#3b82f6' : isHovered ? '#475569' : '#0f172a';
       ctx.lineCap = 'round';
       ctx.stroke();
+
+      // Wall endpoints handles when selected
+      if (isSelected) {
+        [wall.start, wall.end].forEach(v => {
+          ctx.beginPath();
+          ctx.arc(toScreenX(v.x), toScreenY(v.y), 4.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#3b82f6';
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        });
+      }
     });
 
     // 4. Draw Doors & Exits
@@ -205,7 +470,7 @@ export const FloorEditor2D: React.FC = () => {
 
       const dx = wall.end.x - wall.start.x;
       const dy = wall.end.y - wall.start.y;
-      const wallLen = Math.sqrt(dx * dx + dy * dy);
+      const wallLen = Math.hypot(dx, dy);
       if (wallLen < 1e-4) return;
 
       const ux = dx / wallLen;
@@ -229,7 +494,7 @@ export const FloorEditor2D: React.FC = () => {
       ctx.lineCap = 'butt';
       ctx.stroke();
 
-      // Draw Door Threshold line
+      // Door Threshold Line
       ctx.beginPath();
       ctx.moveTo(toScreenX(doorStartX), toScreenY(doorStartY));
       ctx.lineTo(toScreenX(doorEndX), toScreenY(doorEndY));
@@ -238,13 +503,13 @@ export const FloorEditor2D: React.FC = () => {
       if (isBlocked) {
         ctx.strokeStyle = '#ef4444'; // Red
       } else if (door.kind === 'exit') {
-        ctx.strokeStyle = '#16a477'; // Green exit
+        ctx.strokeStyle = '#10b981'; // Green exit
       } else {
-        ctx.strokeStyle = '#315cfa'; // Blue interior
+        ctx.strokeStyle = '#3b82f6'; // Blue interior
       }
       ctx.stroke();
 
-      // Door Badge
+      // Door Badge Label
       const midX = (doorStartX + doorEndX) / 2;
       const midY = (doorStartY + doorEndY) / 2;
 
@@ -262,17 +527,17 @@ export const FloorEditor2D: React.FC = () => {
         ctx.textBaseline = 'middle';
         ctx.fillText('BLOCKED', 0, 0);
       } else if (door.kind === 'exit') {
-        ctx.fillStyle = '#16a477';
+        ctx.fillStyle = '#10b981';
         ctx.beginPath();
-        ctx.roundRect(-18, -10, 36, 20, 4);
+        ctx.roundRect(-20, -10, 40, 20, 4);
         ctx.fill();
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 9px Inter, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('EXIT', 0, 0);
+        ctx.fillText('EXIT ➔', 0, 0);
       } else {
-        ctx.fillStyle = isSelected ? '#315CFA' : '#64748b';
+        ctx.fillStyle = isSelected ? '#3b82f6' : '#64748b';
         ctx.beginPath();
         ctx.roundRect(-16, -9, 32, 18, 4);
         ctx.fill();
@@ -285,17 +550,90 @@ export const FloorEditor2D: React.FC = () => {
       ctx.restore();
     });
 
-    // 5. Draw Occupants
+    // 5. Live CAD Construction Previews
+    // Wall Drawing Preview
+    if (editorMode === 'draw-wall' && drawingStart && mouseWorld && snappedPos) {
+      const lenM = Math.hypot(snappedPos.x - drawingStart.x, snappedPos.y - drawingStart.y);
+
+      ctx.beginPath();
+      ctx.setLineDash([6, 4]);
+      ctx.moveTo(toScreenX(drawingStart.x), toScreenY(drawingStart.y));
+      ctx.lineTo(toScreenX(snappedPos.x), toScreenY(snappedPos.y));
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = Math.max(3, toScreenDist(0.2));
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Start & End Point Handles
+      [drawingStart, snappedPos].forEach(pt => {
+        ctx.beginPath();
+        ctx.arc(toScreenX(pt.x), toScreenY(pt.y), 4.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#3b82f6';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      });
+
+      // Dimension Badge at Midpoint
+      const midX = (drawingStart.x + snappedPos.x) / 2;
+      const midY = (drawingStart.y + snappedPos.y) / 2;
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.roundRect(toScreenX(midX) - 26, toScreenY(midY) - 18, 52, 18, 4);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${lenM.toFixed(2)}m`, toScreenX(midX), toScreenY(midY) - 9);
+    }
+
+    // Door Insertion Preview
+    if ((editorMode === 'insert-door' || editorMode === 'insert-exit') && doorPreview) {
+      const { wall, offsetM, widthM, isExit } = doorPreview;
+      const dx = wall.end.x - wall.start.x;
+      const dy = wall.end.y - wall.start.y;
+      const wallLen = Math.hypot(dx, dy);
+
+      if (wallLen > 0.01) {
+        const ux = dx / wallLen;
+        const uy = dy / wallLen;
+
+        const dStartX = wall.start.x + ux * offsetM;
+        const dStartY = wall.start.y + uy * offsetM;
+        const dEndX = wall.start.x + ux * (offsetM + widthM);
+        const dEndY = wall.start.y + uy * (offsetM + widthM);
+
+        ctx.beginPath();
+        ctx.moveTo(toScreenX(dStartX), toScreenY(dStartY));
+        ctx.lineTo(toScreenX(dEndX), toScreenY(dEndY));
+        ctx.lineWidth = 8;
+        ctx.strokeStyle = isExit ? '#10b981' : '#3b82f6';
+        ctx.stroke();
+
+        // Label Badge
+        const midX = (dStartX + dEndX) / 2;
+        const midY = (dStartY + dEndY) / 2;
+        ctx.fillStyle = isExit ? '#065f46' : '#1e3a8a';
+        ctx.beginPath();
+        ctx.roundRect(toScreenX(midX) - 30, toScreenY(midY) - 22, 60, 18, 4);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 9px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(isExit ? '➔ NEW EXIT' : '+ NEW DOOR', toScreenX(midX), toScreenY(midY) - 13);
+      }
+    }
+
+    // 6. Draw Occupants
     if (showOccupants && currentRun && currentRun.frames.length > 0) {
       const initialFrame = currentRun.frames[0];
       initialFrame.agents.forEach(agent => {
         ctx.beginPath();
         ctx.arc(toScreenX(agent.x), toScreenY(agent.y), 3.5, 0, Math.PI * 2);
-        if (agent.status === 'unreachable') {
-          ctx.fillStyle = '#ef4444';
-        } else {
-          ctx.fillStyle = '#315cfa';
-        }
+        ctx.fillStyle = agent.status === 'unreachable' ? '#ef4444' : '#315cfa';
         ctx.fill();
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1;
@@ -303,11 +641,11 @@ export const FloorEditor2D: React.FC = () => {
       });
     }
 
-    // Metric Scale Bar (5 meters)
+    // 7. Metric Scale Bar (5 meters)
     const scaleBarMeters = 5;
     const barPx = toScreenDist(scaleBarMeters);
     const scaleBarX = 30;
-    const scaleBarY = height - 25;
+    const scaleBarY = cssHeight - 25;
 
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 2;
@@ -324,106 +662,232 @@ export const FloorEditor2D: React.FC = () => {
     ctx.font = '600 10px Inter, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(`${scaleBarMeters}m (SI)`, scaleBarX + barPx / 2, scaleBarY - 6);
-  }, [building, activeScenario, selectedDoorId, selectedRoomId, hoveredDoorId, zoom, showOccupants, currentRun, bounds]);
 
-  // Convert canvas mouse event to real world meters (x, y)
-  const getEventWorldCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    const scaleFactorX = canvas.width / rect.width;
-    const scaleFactorY = canvas.height / rect.height;
+    ctx.restore();
+  }, [
+    building,
+    floor,
+    activeScenario,
+    selectedDoorId,
+    selectedWallId,
+    selectedRoomId,
+    hoveredDoorId,
+    hoveredWallId,
+    zoom,
+    showOccupants,
+    currentRun,
+    bounds,
+    editorMode,
+    drawingStart,
+    mouseWorld,
+    snappedPos,
+    doorPreview,
+  ]);
 
-    const screenX = (e.clientX - rect.left) * scaleFactorX;
-    const screenY = (e.clientY - rect.top) * scaleFactorY;
-
-    const { baseScale, offsetX, offsetY } = transformRef.current;
-    const worldX = (screenX - offsetX) / baseScale;
-    const worldY = (screenY - offsetY) / baseScale;
-    return { worldX, worldY };
-  };
-
-  // Find door hit near coordinates
-  const findDoorAtCoords = (wx: number, wy: number): Door | null => {
-    if (!floor) return null;
-    for (const door of floor.doors) {
-      const wall = floor.walls.find(w => w.id === door.wallId);
-      if (!wall) continue;
-
-      const dx = wall.end.x - wall.start.x;
-      const dy = wall.end.y - wall.start.y;
-      const wallLen = Math.sqrt(dx * dx + dy * dy);
-      if (wallLen < 1e-4) continue;
-
-      const ux = dx / wallLen;
-      const uy = dy / wallLen;
-
-      const dStart = {
-        x: wall.start.x + ux * door.offsetM,
-        y: wall.start.y + uy * door.offsetM,
-      };
-      const dEnd = {
-        x: wall.start.x + ux * (door.offsetM + door.widthM),
-        y: wall.start.y + uy * (door.offsetM + door.widthM),
-      };
-
-      const { dist } = pointToSegment({ x: wx, y: wy }, dStart, dEnd);
-      // Hit tolerance 0.9m
-      if (dist <= 0.9) {
-        return door;
-      }
-    }
-    return null;
-  };
-
-  // Handle Canvas Click: toggles door blockage directly on click!
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Handle Mouse Move over Canvas
+  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const coords = getEventWorldCoords(e);
     if (!coords) return;
+    setMouseWorld({ x: coords.worldX, y: coords.worldY });
 
-    // Check door hit
-    const clickedDoor = findDoorAtCoords(coords.worldX, coords.worldY);
-    if (clickedDoor) {
-      setSelectedDoorId(clickedDoor.id);
-      setSelectedRoomId(null);
-      toggleDoorBlockage(clickedDoor.id);
-      return;
+    const snap = calculateSnap(coords.worldX, coords.worldY, drawingStart);
+    setSnappedPos(snap);
+
+    if (editorMode === 'draw-wall') {
+      if (canvasRef.current) canvasRef.current.style.cursor = 'crosshair';
+      setDoorPreview(null);
+    } else if (editorMode === 'insert-door' || editorMode === 'insert-exit') {
+      if (canvasRef.current) canvasRef.current.style.cursor = 'cell';
+      const preview = computeDoorPlacement(coords.worldX, coords.worldY, editorMode === 'insert-exit');
+      setDoorPreview(preview);
+    } else if (editorMode === 'delete') {
+      if (canvasRef.current) canvasRef.current.style.cursor = 'not-allowed';
+      const hitDoor = findDoorAtCoords(coords.worldX, coords.worldY);
+      const hitWall = !hitDoor ? findWallAtCoords(coords.worldX, coords.worldY) : null;
+      setHoveredDoorId(hitDoor?.id || null);
+      setHoveredWallId(hitWall?.id || null);
+    } else {
+      // Select Mode
+      const hoveredDoor = findDoorAtCoords(coords.worldX, coords.worldY);
+      const hoveredWall = !hoveredDoor ? findWallAtCoords(coords.worldX, coords.worldY) : null;
+
+      if (hoveredDoor || hoveredWall) {
+        if (canvasRef.current) canvasRef.current.style.cursor = 'pointer';
+        setHoveredDoorId(hoveredDoor?.id || null);
+        setHoveredWallId(hoveredWall?.id || null);
+      } else {
+        if (canvasRef.current) canvasRef.current.style.cursor = 'default';
+        setHoveredDoorId(null);
+        setHoveredWallId(null);
+      }
     }
+  };
 
-    // Check room hit
-    if (floor) {
+  // Handle Canvas Click: handles wall creation, door placement, and selection
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const coords = getEventWorldCoords(e);
+    if (!coords || !floor) return;
+
+    if (editorMode === 'draw-wall') {
+      const snap = calculateSnap(coords.worldX, coords.worldY, drawingStart);
+
+      if (!drawingStart) {
+        // First click: start drawing wall
+        setDrawingStart({ x: snap.x, y: snap.y });
+      } else {
+        // Second click: finish wall segment
+        const dist = Math.hypot(snap.x - drawingStart.x, snap.y - drawingStart.y);
+        if (dist >= 0.25) {
+          pushHistory();
+          const newWallId = `w-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
+          const newWall: Wall = {
+            id: newWallId,
+            start: { x: drawingStart.x, y: drawingStart.y },
+            end: { x: snap.x, y: snap.y },
+            thicknessM: 0.2,
+            heightM: 2.8,
+          };
+
+          const updatedBuilding: Building = {
+            ...building,
+            floors: [
+              {
+                ...floor,
+                walls: [...floor.walls, newWall],
+              },
+            ] as [typeof floor],
+          };
+
+          setBuilding(updatedBuilding);
+          // Chain to next vertex
+          setDrawingStart({ x: snap.x, y: snap.y });
+          setSelectedWallId(newWallId);
+        }
+      }
+    } else if (editorMode === 'insert-door' || editorMode === 'insert-exit') {
+      const isExit = editorMode === 'insert-exit';
+      const placement = computeDoorPlacement(coords.worldX, coords.worldY, isExit);
+
+      if (placement) {
+        pushHistory();
+        const doorId = isExit ? `d-exit-${Date.now().toString(36)}` : `d-door-${Date.now().toString(36)}`;
+        const newDoor: Door = {
+          id: doorId,
+          wallId: placement.wall.id,
+          offsetM: placement.offsetM,
+          widthM: placement.widthM,
+          passable: true,
+          kind: isExit ? 'exit' : 'interior',
+        };
+
+        const updatedDoors = [...floor.doors, newDoor];
+        const updatedExits = isExit
+          ? [
+              ...floor.exits,
+              {
+                id: `exit-${Date.now().toString(36)}`,
+                doorId,
+                destination: 'outside' as const,
+              },
+            ]
+          : floor.exits;
+
+        const updatedBuilding: Building = {
+          ...building,
+          floors: [
+            {
+              ...floor,
+              doors: updatedDoors,
+              exits: updatedExits,
+            },
+          ] as [typeof floor],
+        };
+
+        setBuilding(updatedBuilding);
+        setSelectedDoorId(doorId);
+        setEditorMode('select');
+        setDoorPreview(null);
+      }
+    } else if (editorMode === 'delete') {
+      const hitDoor = findDoorAtCoords(coords.worldX, coords.worldY);
+      if (hitDoor) {
+        pushHistory();
+        const doorToDelete = hitDoor.id;
+        setBuilding({
+          ...building,
+          floors: [
+            {
+              ...floor,
+              doors: floor.doors.filter(d => d.id !== doorToDelete),
+              exits: floor.exits.filter(e => e.doorId !== doorToDelete),
+            },
+          ] as [typeof floor],
+        });
+        setSelectedDoorId(null);
+        return;
+      }
+
+      const hitWall = findWallAtCoords(coords.worldX, coords.worldY);
+      if (hitWall) {
+        pushHistory();
+        const wallToDelete = hitWall.id;
+        const doorsToRemove = new Set(
+          floor.doors.filter(d => d.wallId === wallToDelete).map(d => d.id)
+        );
+        setBuilding({
+          ...building,
+          floors: [
+            {
+              ...floor,
+              walls: floor.walls.filter(w => w.id !== wallToDelete),
+              doors: floor.doors.filter(d => !doorsToRemove.has(d.id)),
+              exits: floor.exits.filter(e => !doorsToRemove.has(e.doorId)),
+            },
+          ] as [typeof floor],
+        });
+        setSelectedWallId(null);
+        return;
+      }
+    } else {
+      // Select Mode: Door click toggles blockage; wall/room click selects
+      const clickedDoor = findDoorAtCoords(coords.worldX, coords.worldY);
+      if (clickedDoor) {
+        setSelectedDoorId(clickedDoor.id);
+        setSelectedWallId(null);
+        setSelectedRoomId(null);
+        toggleDoorBlockage(clickedDoor.id);
+        return;
+      }
+
+      const clickedWall = findWallAtCoords(coords.worldX, coords.worldY);
+      if (clickedWall) {
+        setSelectedWallId(clickedWall.id);
+        setSelectedDoorId(null);
+        setSelectedRoomId(null);
+        return;
+      }
+
+      // Check room hit
       for (const room of floor.rooms) {
         if (isPointInPolygon({ x: coords.worldX, y: coords.worldY }, room.outline)) {
           setSelectedRoomId(room.id);
           setSelectedDoorId(null);
+          setSelectedWallId(null);
           return;
         }
       }
-    }
 
-    // Clicked empty area
-    setSelectedDoorId(null);
-    setSelectedRoomId(null);
-  };
-
-  // Handle Mouse Move: hover cursor indicator
-  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const coords = getEventWorldCoords(e);
-    if (!coords) return;
-
-    const hovered = findDoorAtCoords(coords.worldX, coords.worldY);
-    if (hovered) {
-      setHoveredDoorId(hovered.id);
-      if (canvasRef.current) canvasRef.current.style.cursor = 'pointer';
-    } else {
-      setHoveredDoorId(null);
-      if (canvasRef.current) canvasRef.current.style.cursor = 'crosshair';
+      // Clicked empty canvas
+      setSelectedDoorId(null);
+      setSelectedWallId(null);
+      setSelectedRoomId(null);
     }
   };
 
   // Modify room occupants in editor
   const updateRoomOccupants = (roomId: string, delta: number) => {
     if (!floor) return;
+    pushHistory();
     const updatedRooms = floor.rooms.map(r => {
       if (r.id === roomId) {
         return { ...r, occupants: Math.max(0, r.occupants + delta) };
@@ -431,7 +895,7 @@ export const FloorEditor2D: React.FC = () => {
       return r;
     });
 
-    const updatedBuilding = {
+    setBuilding({
       ...building,
       floors: [
         {
@@ -439,12 +903,11 @@ export const FloorEditor2D: React.FC = () => {
           rooms: updatedRooms,
         },
       ] as [typeof floor],
-    };
-
-    setBuilding(updatedBuilding);
+    });
   };
 
   const selectedDoor = floor?.doors.find(d => d.id === selectedDoorId);
+  const selectedWall = floor?.walls.find(w => w.id === selectedWallId);
   const selectedRoom = floor?.rooms.find(r => r.id === selectedRoomId);
 
   return (
@@ -466,219 +929,398 @@ export const FloorEditor2D: React.FC = () => {
           </div>
         )}
 
-        {/* Canvas Toolbar */}
-        <div className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-md border border-slate-200 rounded-lg p-1 flex items-center gap-1.5 shadow-sm">
+        {/* CAD Tool Bar & Controls */}
+        <div className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl p-1.5 flex flex-wrap items-center gap-1 shadow-md">
+          {/* Tool Selector Buttons */}
+          <button
+            onClick={() => {
+              setEditorMode('select');
+              setDrawingStart(null);
+            }}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+              editorMode === 'select'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 hover:bg-slate-100'
+            }`}
+            title="Select & Toggle Blockage (V)"
+          >
+            <MousePointer className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Select</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setEditorMode('draw-wall');
+              setDrawingStart(null);
+            }}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+              editorMode === 'draw-wall'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 hover:bg-slate-100'
+            }`}
+            title="Draw Wall Tool (W)"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Wall</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setEditorMode('insert-door');
+              setDrawingStart(null);
+            }}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+              editorMode === 'insert-door'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 hover:bg-slate-100'
+            }`}
+            title="Add Interior Door (D)"
+          >
+            <DoorOpen className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Door</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setEditorMode('insert-exit');
+              setDrawingStart(null);
+            }}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+              editorMode === 'insert-exit'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-slate-700 hover:bg-slate-100'
+            }`}
+            title="Add Exterior Exit (E)"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Exit</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setEditorMode('delete');
+              setDrawingStart(null);
+            }}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+              editorMode === 'delete'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : 'text-slate-700 hover:bg-slate-100'
+            }`}
+            title="Delete Tool"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Delete</span>
+          </button>
+
+          <div className="w-[1px] h-5 bg-slate-200 mx-1" />
+
+          {/* Undo Action */}
+          <button
+            onClick={handleUndo}
+            disabled={history.length === 0}
+            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-700 disabled:opacity-35 transition-opacity"
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo2 className="w-4 h-4" />
+          </button>
+
+          <div className="w-[1px] h-5 bg-slate-200 mx-1" />
+
+          {/* Zoom Controls */}
           <button
             onClick={() => setZoom(z => Math.min(2.5, z + 0.15))}
-            className="p-1.5 hover:bg-slate-100 rounded text-slate-700"
+            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-700"
             title="Zoom In"
           >
             <ZoomIn className="w-4 h-4" />
           </button>
           <button
             onClick={() => setZoom(z => Math.max(0.5, z - 0.15))}
-            className="p-1.5 hover:bg-slate-100 rounded text-slate-700"
+            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-700"
             title="Zoom Out"
           >
             <ZoomOut className="w-4 h-4" />
           </button>
           <button
             onClick={() => setZoom(1.0)}
-            className="p-1.5 hover:bg-slate-100 rounded text-slate-700 text-xs font-semibold px-2"
+            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-700 text-xs font-semibold px-2"
             title="Reset Zoom"
           >
             {Math.round(zoom * 100)}%
           </button>
-          <div className="w-[1px] h-4 bg-slate-200" />
+
+          <div className="w-[1px] h-5 bg-slate-200 mx-1" />
+
+          {/* Occupants Layer Toggle */}
           <button
             onClick={() => setShowOccupants(!showOccupants)}
-            className={`px-2 py-1 rounded text-xs font-medium flex items-center gap-1 ${
-              showOccupants ? 'bg-blue-50 text-[#315CFA]' : 'text-slate-600 hover:bg-slate-100'
+            className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 ${
+              showOccupants ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Occupants</span>
+            <span className="hidden md:inline">Occupants</span>
           </button>
 
-          {/* Toggle inspector button for small screens */}
+          {/* Mobile Inspector Toggle */}
           <button
             onClick={() => setInspectorOpen(!inspectorOpen)}
-            className="lg:hidden p-1.5 hover:bg-slate-100 rounded text-slate-700 ml-1"
+            className="lg:hidden p-1.5 hover:bg-slate-100 rounded-lg text-slate-700 ml-1"
             title="Toggle Properties Panel"
           >
             <Sliders className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Main Canvas Area */}
-        <div className="flex-1 flex items-center justify-center p-2 sm:p-4 overflow-hidden relative">
-          <canvas
-            ref={canvasRef}
-            width={1100}
-            height={680}
-            onClick={handleCanvasClick}
-            onMouseMove={handleCanvasMouseMove}
-            className="bg-white rounded-xl border border-slate-200 shadow-sm max-w-full max-h-full object-contain cursor-crosshair"
-          />
-        </div>
-
-        {/* Interactive Tip and Quick Legend */}
-        <div className="h-9 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 md:px-6 flex items-center justify-between text-xs text-slate-600 shrink-0">
-          <div className="flex items-center gap-3 overflow-x-auto text-[11px]">
-            <span className="flex items-center gap-1 shrink-0">
-              <span className="w-2.5 h-1 bg-[#1e293b] rounded" /> Wall
-            </span>
-            <span className="flex items-center gap-1 shrink-0">
-              <span className="w-2.5 h-1 bg-[#16a477] rounded" /> Exit
-            </span>
-            <span className="flex items-center gap-1 shrink-0">
-              <span className="w-2.5 h-1 bg-[#315cfa] rounded" /> Door
-            </span>
-            <span className="flex items-center gap-1 shrink-0">
-              <span className="w-2.5 h-1 bg-[#ef4444] rounded" /> Blocked
-            </span>
-          </div>
-          <span className="text-[11px] text-slate-500 hidden sm:inline">
-            Click directly on any door to block/unblock
-          </span>
-        </div>
-      </div>
-
-      {/* Right Control & Door Inspection Panel (Collapsible on mobile) */}
-      <div
-        className={`${
-          inspectorOpen ? 'flex' : 'hidden lg:flex'
-        } w-full lg:w-80 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex-col h-72 lg:h-full overflow-hidden shrink-0 z-10 shadow-lg lg:shadow-none`}
-      >
-        <div className="p-3.5 border-b border-slate-100 flex items-center justify-between shrink-0">
-          <div>
-            <h3 className="font-bold text-sm text-slate-900">Scenario & Properties</h3>
-            <p className="text-[11px] text-slate-500">Inspect doors, rooms & trigger simulations</p>
-          </div>
-          <button
-            onClick={() => setInspectorOpen(false)}
-            className="lg:hidden p-1 text-slate-400 hover:text-slate-600"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Selected Element Property Inspector */}
-        {selectedRoom && (
-          <div className="p-3.5 bg-blue-50/60 border-b border-blue-100 shrink-0 space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-blue-900">Selected Room: {selectedRoom.name}</span>
-              <span className="text-[10px] text-blue-700 font-mono">{selectedRoom.id}</span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-600">Occupants:</span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => updateRoomOccupants(selectedRoom.id, -2)}
-                  className="w-6 h-6 rounded bg-white border border-slate-300 font-bold text-xs hover:bg-slate-50"
-                >
-                  -
-                </button>
-                <span className="font-bold text-slate-900 min-w-8 text-center font-mono">
-                  {selectedRoom.occupants}
-                </span>
-                <button
-                  onClick={() => updateRoomOccupants(selectedRoom.id, +2)}
-                  className="w-6 h-6 rounded bg-white border border-slate-300 font-bold text-xs hover:bg-slate-50"
-                >
-                  +
-                </button>
-              </div>
-            </div>
+        {/* Live Instruction Banner for Active Mode */}
+        {editorMode !== 'select' && (
+          <div className="absolute top-16 left-3 z-10 bg-slate-900/90 text-white text-[11px] font-medium px-3.5 py-1.5 rounded-lg shadow-lg backdrop-blur-md flex items-center gap-2">
+            {editorMode === 'draw-wall' && (
+              <span>
+                {drawingStart
+                  ? 'Click next point to complete wall. (Esc to cancel)'
+                  : 'Click on grid or wall vertex to start drawing wall.'}
+              </span>
+            )}
+            {editorMode === 'insert-door' && (
+              <span>Hover over any wall to preview, click to insert 1.0m interior door.</span>
+            )}
+            {editorMode === 'insert-exit' && (
+              <span>Hover over an exterior wall, click to insert 1.5m exterior exit door.</span>
+            )}
+            {editorMode === 'delete' && (
+              <span className="text-rose-300">Click any wall or door to remove it permanently.</span>
+            )}
+            <button
+              onClick={() => {
+                setEditorMode('select');
+                setDrawingStart(null);
+              }}
+              className="ml-2 hover:bg-slate-800 p-0.5 rounded text-slate-400 hover:text-white"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
 
-        {/* Doors List */}
-        <div className="p-3.5 space-y-2.5 flex-1 overflow-y-auto">
-          <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-            <span>Doors & Exits ({floor?.doors.length ?? 0})</span>
-            {activeScenario.blockedDoorIds.length > 0 && (
-              <span className="text-rose-600 font-bold font-mono">
-                {activeScenario.blockedDoorIds.length} blocked
-              </span>
-            )}
-          </div>
+        {/* Main 2D Drawing Canvas */}
+        <div className="flex-1 flex items-center justify-center p-2 sm:p-4 overflow-hidden relative">
+          <canvas
+            ref={canvasRef}
+            className="w-full h-full max-w-[1200px] max-h-[800px] bg-white rounded-xl shadow-md border border-slate-200"
+            onClick={handleCanvasClick}
+            onMouseMove={handleCanvasMouseMove}
+            onDoubleClick={() => setDrawingStart(null)}
+          />
+        </div>
+      </div>
 
-          <div className="space-y-2">
-            {floor?.doors.map(door => {
-              const isBlocked = activeScenario.blockedDoorIds.includes(door.id);
-              const isExit = door.kind === 'exit';
-              const isSelected = selectedDoorId === door.id;
+      {/* Right Properties & Inspector Drawer */}
+      <div
+        className={`w-full lg:w-80 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col shrink-0 shadow-sm z-20 ${
+          inspectorOpen ? 'block' : 'hidden lg:flex'
+        }`}
+      >
+        <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Sliders className="w-4 h-4 text-blue-600" />
+            CAD Inspector & Properties
+          </h3>
+          <button
+            onClick={() => setInspectorOpen(false)}
+            className="lg:hidden p-1 text-slate-400 hover:text-slate-600 rounded"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
 
-              return (
-                <div
-                  key={door.id}
-                  onClick={() => setSelectedDoorId(door.id)}
-                  className={`p-2.5 rounded-lg border text-xs transition-all cursor-pointer ${
-                    isSelected
-                      ? 'border-[#315CFA] ring-1 ring-blue-500/20 bg-blue-50/30'
-                      : isBlocked
-                      ? 'bg-rose-50/60 border-rose-200'
-                      : 'bg-white border-slate-200 hover:border-slate-300'
+        <div className="flex-1 overflow-y-auto p-4 space-y-5">
+          {/* Selection State Details */}
+          {selectedWall && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-900">Selected Wall</span>
+                <span className="text-[10px] font-mono text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                  {selectedWall.id}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs font-mono text-slate-600">
+                <div className="bg-white p-2 rounded border border-slate-200">
+                  <span className="text-[10px] text-slate-400 block font-sans">Start Point</span>
+                  ({selectedWall.start.x}m, {selectedWall.start.y}m)
+                </div>
+                <div className="bg-white p-2 rounded border border-slate-200">
+                  <span className="text-[10px] text-slate-400 block font-sans">End Point</span>
+                  ({selectedWall.end.x}m, {selectedWall.end.y}m)
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-xs pt-1">
+                <span className="text-slate-500">Wall Length:</span>
+                <span className="font-bold text-slate-800">
+                  {Math.hypot(
+                    selectedWall.end.x - selectedWall.start.x,
+                    selectedWall.end.y - selectedWall.start.y
+                  ).toFixed(2)}m
+                </span>
+              </div>
+              <button
+                onClick={handleDeleteSelected}
+                className="w-full btn-danger text-xs py-2 mt-2 flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete Wall
+              </button>
+            </div>
+          )}
+
+          {selectedDoor && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-900">Selected Door</span>
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                    selectedDoor.kind === 'exit'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-blue-100 text-blue-800'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                      {isExit ? (
-                        <span className="text-emerald-700 bg-emerald-100 px-1 py-0.2 rounded text-[9px] uppercase font-bold">
-                          EXIT
-                        </span>
-                      ) : (
-                        <span className="text-blue-700 bg-blue-100 px-1 py-0.2 rounded text-[9px] uppercase font-bold">
-                          DOOR
-                        </span>
-                      )}
-                      {door.id}
-                    </span>
-                    <button
-                      onClick={e => {
-                        e.stopPropagation();
-                        toggleDoorBlockage(door.id);
-                      }}
-                      className={`px-2 py-0.5 rounded font-semibold text-[11px] transition-colors ${
-                        isBlocked
-                          ? 'bg-rose-600 text-white hover:bg-rose-700 shadow-xs'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
-                    >
-                      {isBlocked ? 'Blocked (Click)' : 'Passable'}
-                    </button>
-                  </div>
-                  <div className="text-[11px] text-slate-500 flex items-center justify-between">
-                    <span>Width: {door.widthM}m</span>
-                    <span>Wall: {door.wallId}</span>
-                  </div>
+                  {selectedDoor.kind.toUpperCase()}
+                </span>
+              </div>
+              <div className="text-xs space-y-1.5 text-slate-600">
+                <div className="flex justify-between">
+                  <span>Width:</span>
+                  <span className="font-bold font-mono">{selectedDoor.widthM}m</span>
                 </div>
-              );
-            })}
+                <div className="flex justify-between">
+                  <span>Offset on Wall:</span>
+                  <span className="font-bold font-mono">{selectedDoor.offsetM}m</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Status:</span>
+                  <span
+                    className={`font-bold ${
+                      activeScenario.blockedDoorIds.includes(selectedDoor.id)
+                        ? 'text-rose-600'
+                        : 'text-emerald-600'
+                    }`}
+                  >
+                    {activeScenario.blockedDoorIds.includes(selectedDoor.id) ? 'Blocked' : 'Passable'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 flex flex-col gap-2">
+                <button
+                  onClick={() => toggleDoorBlockage(selectedDoor.id)}
+                  className={`w-full py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                    activeScenario.blockedDoorIds.includes(selectedDoor.id)
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                      : 'bg-rose-600 hover:bg-rose-700 text-white shadow-sm'
+                  }`}
+                >
+                  {activeScenario.blockedDoorIds.includes(selectedDoor.id)
+                    ? 'Unblock Door'
+                    : 'Block Door (Simulate Hazard)'}
+                </button>
+                <button
+                  onClick={handleDeleteSelected}
+                  className="w-full btn-secondary text-xs py-1.5 text-rose-600 hover:bg-rose-50 border-rose-200 flex items-center justify-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete Door
+                </button>
+              </div>
+            </div>
+          )}
+
+          {selectedRoom && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-900">Selected Room</span>
+                <span className="text-[10px] font-mono text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                  {selectedRoom.id}
+                </span>
+              </div>
+              <h4 className="text-sm font-extrabold text-slate-800">{selectedRoom.name}</h4>
+
+              {/* Occupant Stepper */}
+              <div className="pt-2">
+                <label className="text-[11px] font-bold text-slate-600 block mb-1.5">
+                  Occupant Load
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => updateRoomOccupants(selectedRoom.id, -2)}
+                    className="w-8 h-8 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-700 font-bold"
+                  >
+                    <Minus className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="flex-1 text-center font-mono font-extrabold text-sm text-slate-800">
+                    {selectedRoom.occupants}
+                  </span>
+                  <button
+                    onClick={() => updateRoomOccupants(selectedRoom.id, 2)}
+                    className="w-8 h-8 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-700 font-bold"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!selectedWall && !selectedDoor && !selectedRoom && (
+            <div className="text-center py-6 text-slate-400">
+              <MousePointer className="w-8 h-8 mx-auto mb-2 text-slate-300 stroke-1" />
+              <p className="text-xs font-semibold text-slate-600">No Element Selected</p>
+              <p className="text-[11px] text-slate-400 max-w-xs mx-auto mt-1">
+                Click any wall, door, or room to inspect and edit its properties. Use toolbar tools to add new walls and doors.
+              </p>
+            </div>
+          )}
+
+          {/* Grid Snap Setting */}
+          <div className="pt-2 border-t border-slate-200">
+            <label className="text-[11px] font-bold text-slate-600 block mb-1.5">
+              Grid Snapping Interval
+            </label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[0.25, 0.5, 1.0].map(step => (
+                <button
+                  key={step}
+                  onClick={() => setGridSnapStep(step)}
+                  className={`py-1 text-xs font-mono font-bold rounded-lg border transition-all ${
+                    gridSnapStep === step
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {step}m
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Action Buttons at bottom */}
-        <div className="p-3 border-t border-slate-100 bg-slate-50 space-y-2 shrink-0">
+        {/* Bottom Drawer Simulation Launch */}
+        <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
           <button
             onClick={() => {
-              runCurrentSimulation();
               setIs3DMode(true);
-              setActiveTab('simulation3d');
+              setActiveTab('viewer3d');
             }}
-            disabled={!validation.valid || isSimulating}
-            className="w-full btn-primary text-xs py-2 justify-center disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+            className="btn-secondary text-xs py-2 px-3 flex-1 flex items-center justify-center gap-1.5"
           >
-            <Play className="w-3.5 h-3.5 fill-white" />
-            Simulate Current Scenario in 3D
+            Open in 3D Cutaway →
           </button>
           <button
-            onClick={() => setActiveTab('agent')}
-            className="w-full btn-ai text-xs py-1.5 justify-center"
+            onClick={() => runCurrentSimulation()}
+            disabled={!validation.valid || isSimulating}
+            className="btn-primary text-xs py-2 px-3 flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            Let Meta AI Find Vulnerabilities
+            <Play className="w-3.5 h-3.5 fill-white" />
+            Simulate
           </button>
         </div>
       </div>

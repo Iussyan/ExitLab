@@ -39,7 +39,7 @@
 | AI-vs-random evaluation | Verified | [benchmark.ts](file:///d:/Users/QCU/Documents/ExitLab/src/agent/benchmark.ts), [BenchmarkView.tsx](file:///d:/Users/QCU/Documents/ExitLab/src/components/benchmark/BenchmarkView.tsx) | Equal-budget scenario benchmark with 3D worst-case replay and control comparison |
 | Responsive App Shell & Drawer | Verified | [Sidebar.tsx](file:///d:/Users/QCU/Documents/ExitLab/src/components/layout/Sidebar.tsx), [Header.tsx](file:///d:/Users/QCU/Documents/ExitLab/src/components/layout/Header.tsx) | Slide-in drawer with backdrop overlay, mobile hamburger toggle, responsive action pills |
 | Project Dashboard & Presets | Verified | [Dashboard.tsx](file:///d:/Users/QCU/Documents/ExitLab/src/components/dashboard/Dashboard.tsx) | Direct 2D/3D quick launch buttons on each card, responsive 2x2/4x1 metrics grid |
-| 2D Floor Plan Editor & Canvas | Verified | [FloorEditor2D.tsx](file:///d:/Users/QCU/Documents/ExitLab/src/components/editor/FloorEditor2D.tsx) | Direct canvas click hit-testing for doors and rooms, cursor hover cues, collapsible drawer |
+| 2D Floor Plan Editor & Canvas | Verified | [FloorEditor2D.tsx](file:///d:/Users/QCU/Documents/ExitLab/src/components/editor/FloorEditor2D.tsx) | Interactive CAD drawing: Wall tool (chaining + snap), Door tool, Exit tool, Delete tool, Undo (Ctrl+Z), and Retina scaling |
 | 3D Simulation Workspace | Verified | [Viewer3D.tsx](file:///d:/Users/QCU/Documents/ExitLab/src/components/viewer3d/Viewer3D.tsx) | InstancedMesh rendering, smooth 60fps useFrame lerping, Drei Grid, exit beacons, room labels, camera presets |
 | AI Stress Testing Panel | Verified | [AIPanel.tsx](file:///d:/Users/QCU/Documents/ExitLab/src/components/agent/AIPanel.tsx) | Live agent activity trace stream, ranked impact score cards, 3D scenario replay triggers |
 | Results & Spatial Heatmap | Verified | [ResultsView.tsx](file:///d:/Users/QCU/Documents/ExitLab/src/components/results/ResultsView.tsx) | Run Selector dropdown, 2D spatial congestion density canvas overlay, 3D replay link |
@@ -51,8 +51,8 @@
 |---|---|---|---|
 | `git status` | 2026-10-29 | Passed | Tracked and verified |
 | `npm.cmd install` | 2026-10-29 | Passed (exit code 0) | Installed all core and dev dependencies |
-| `npm.cmd test -- --run` | 2026-10-29 | Passed (25 of 25 tests) | Vitest test suite executing in ~4.8s |
-| `npm.cmd run build` | 2026-10-29 | Passed (exit code 0) | `tsc && vite build` bundled in 19.62s |
+| `npm.cmd test -- --run` | 2026-10-29 | Passed (26 of 26 tests) | Vitest test suite executing in ~5.1s |
+| `npm.cmd run build` | 2026-10-29 | Passed (exit code 0) | `tsc && vite build` bundled in 17.61s |
 | `curl.exe http://localhost:5173/` | 2026-10-29 | HTTP 200 OK | Vite dev server active and serving frontend |
 | `curl.exe http://localhost:3001/api/health` | 2026-10-29 | HTTP 200 OK | Backend API server active |
 
@@ -75,4 +75,9 @@
   - Added smooth 60fps trajectory lerping in `useFrame`, eliminating discrete stepping jumps.
   - Added architectural floor plate with Drei `<Grid>`, glowing green exit portals with floating `EXIT ➔` wayfinding beacons, red warning barricades with `BLOCKED` text, and uppercase room blueprint labels.
   - Added camera preset angles (`3D Iso`, `Top Plan`, `Front`) and refined glassmorphic HUD and continuous scrub slider.
+- 2026-10-29: Interactive CAD Floor Plan Drawing Tooling (Option 2):
+  - Added Wall Tool (`W`) with real-time dashed construction line, live metric length badge, vertex snapping ($<0.35\text{m}$), and orthogonal angle locking.
+  - Added Interior Door Tool (`D`) and Exterior Discharge Exit Tool (`E`) with real-time sliding door box previews on walls.
+  - Added Delete Tool for removing walls and doors, Undo (`Ctrl+Z`), configurable grid snap ($0.25\text{m}$, $0.5\text{m}$, $1.0\text{m}$), and high-DPI Retina canvas scaling.
+  - Added automated unit test verifying dynamic CAD geometry creation and immediate simulation execution (26/26 tests passing).
 
