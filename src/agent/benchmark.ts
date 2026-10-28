@@ -20,6 +20,8 @@ export interface BenchmarkResult {
   budget: number;
   aiAgentResults: BenchmarkMetrics;
   randomBaselineResults: BenchmarkMetrics;
+  aiRuns?: SimulationResult[];
+  randomRuns?: SimulationResult[];
   comparisonSummary: {
     stressDetectionAdvantagePct: number;
     unreachableDetectionDiff: number;
@@ -132,6 +134,8 @@ export async function runAIVsRandomBenchmark(
     budget,
     aiAgentResults: aiMetrics,
     randomBaselineResults: randMetrics,
+    aiRuns: aiReport.candidateRuns,
+    randomRuns,
     comparisonSummary: {
       stressDetectionAdvantagePct:
         aiWorstClearance && randWorstClearance

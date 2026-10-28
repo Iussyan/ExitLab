@@ -21,7 +21,9 @@ export interface ProjectContextType {
   setActiveScenario: (s: Scenario) => void;
   toggleDoorBlockage: (doorId: string) => void;
   currentRun: SimulationResult | null;
+  setCurrentRun: (r: SimulationResult | null) => void;
   baselineRun: SimulationResult | null;
+  availableRuns: SimulationResult[];
   runCurrentSimulation: () => SimulationResult;
   runBaselineSimulation: () => SimulationResult;
   stressTestReport: StressTestReport | null;
@@ -33,6 +35,8 @@ export interface ProjectContextType {
   setActiveTab: (t: string) => void;
   is3DMode: boolean;
   setIs3DMode: (v: boolean) => void;
+  mobileSidebarOpen: boolean;
+  setMobileSidebarOpen: (v: boolean) => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | null>(null);
@@ -45,6 +49,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [is3DMode, setIs3DMode] = useState<boolean>(false);
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
 
   const [activeScenario, setActiveScenario] = useState<Scenario>({
     id: 'custom-scenario',
@@ -139,6 +144,17 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [building.id]);
 
+  // Aggregated list of all unique available runs
+  const availableRuns = React.useMemo(() => {
+    const runsMap = new Map<string, SimulationResult>();
+    if (baselineRun) runsMap.set(baselineRun.runId, baselineRun);
+    if (currentRun) runsMap.set(currentRun.runId, currentRun);
+    if (stressTestReport) {
+      stressTestReport.candidateRuns.forEach(r => runsMap.set(r.runId, r));
+    }
+    return Array.from(runsMap.values());
+  }, [baselineRun, currentRun, stressTestReport]);
+
   return (
     <ProjectContext.Provider
       value={{
@@ -151,7 +167,9 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setActiveScenario,
         toggleDoorBlockage,
         currentRun,
+        setCurrentRun,
         baselineRun,
+        availableRuns,
         runCurrentSimulation,
         runBaselineSimulation,
         stressTestReport,
@@ -163,6 +181,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setActiveTab,
         is3DMode,
         setIs3DMode,
+        mobileSidebarOpen,
+        setMobileSidebarOpen,
       }}
     >
       {children}

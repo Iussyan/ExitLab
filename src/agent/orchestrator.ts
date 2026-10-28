@@ -154,8 +154,22 @@ export async function runStressTestAgent(
         body: JSON.stringify({ buildingSummary: summary, budget }),
       });
       if (response.ok) {
-        agentMode = 'meta_api';
-        log('hypothesis', 'success', 'Received Meta model hypothesis and scenario suggestions');
+        const data = await response.json();
+        if (Array.isArray(data.scenarios) && data.scenarios.length > 0) {
+          agentMode = 'meta_api';
+          candidateScenariosToTest.length = 0;
+          for (const sc of data.scenarios) {
+            candidateScenariosToTest.push({
+              name: sc.name || 'AI Proposed Scenario',
+              hypothesis: sc.hypothesis || 'AI disruption hypothesis',
+              blockedDoorIds: sc.blockedDoorIds || [],
+              multiplier: sc.occupancyMultiplier || 1.0,
+            });
+          }
+          log('hypothesis', 'success', `Meta model proposed ${candidateScenariosToTest.length} disruption scenarios`);
+        } else {
+          log('hypothesis', 'skipped', 'Meta model returned empty proposals; using guarded heuristic fallback');
+        }
       } else {
         log('hypothesis', 'skipped', 'Meta API endpoint unavailable; falling back to guarded autonomous agent');
       }

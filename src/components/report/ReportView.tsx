@@ -1,5 +1,15 @@
 import React from 'react';
-import { Printer, ShieldAlert, CheckCircle2, Clock, Users, Compass, FileText } from 'lucide-react';
+import {
+  Printer,
+  ShieldAlert,
+  CheckCircle2,
+  Clock,
+  Users,
+  Compass,
+  FileText,
+  Download,
+  FileSpreadsheet
+} from 'lucide-react';
 import { useProject } from '../../context/ProjectContext';
 
 export const ReportView: React.FC = () => {
@@ -9,39 +19,100 @@ export const ReportView: React.FC = () => {
     window.print();
   };
 
+  const handleExportJSON = () => {
+    const reportData = {
+      buildingId: building.id,
+      buildingName: building.name,
+      units: building.units,
+      generatedAt: new Date().toISOString(),
+      baselineMetrics: baselineRun?.metrics || null,
+      stressFindings: stressTestReport?.findings || [],
+      modelingAssumptions: {
+        gridResolutionM: 0.25,
+        timestepDt: 0.25,
+        nominalSpeedMps: 1.2,
+        doorFlowCapacity: 1.3,
+        cellCapacity: 1,
+      },
+      disclaimer: 'Tabletop research and decision-support prototype. Never certify building safety.',
+    };
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `exitlab-report-${building.id}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCSV = () => {
+    const run = currentRun || baselineRun;
+    if (!run) return;
+    let csv = 'frame,time_seconds,active_agents,exited_cumulative\n';
+    run.frames.forEach((f, idx) => {
+      csv += `${idx},${f.timeSeconds.toFixed(2)},${f.activeCount},${f.exitedCumulative}\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `exitlab-timeseries-${run.runId}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const floor = building.floors[0];
   const totalOccupants = floor?.rooms.reduce((acc, r) => acc + r.occupants, 0) ?? 0;
   const exitDoors = floor?.doors.filter(d => d.kind === 'exit') ?? [];
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-8">
-      {/* Print Trigger Button */}
-      <div className="flex items-center justify-between no-print">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-6 sm:space-y-8">
+      {/* Header & Export Action Buttons */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Evacuation Plan Stress Report</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Evacuation Plan Stress Report</h2>
           <p className="text-xs text-slate-500">
             Formally documented findings, comparative metrics, and research boundaries
           </p>
         </div>
-        <button
-          onClick={handlePrint}
-          className="btn-primary text-xs py-2 px-4 shadow-sm"
-        >
-          <Printer className="w-4 h-4" />
-          Print / Save as PDF
-        </button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleExportCSV}
+            className="btn-outline text-xs py-2 px-3 shadow-xs flex items-center gap-1.5"
+            title="Download frame-by-frame time series CSV"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+            <span className="hidden sm:inline">Export CSV</span>
+          </button>
+          <button
+            onClick={handleExportJSON}
+            className="btn-outline text-xs py-2 px-3 shadow-xs flex items-center gap-1.5"
+            title="Download structured JSON report data"
+          >
+            <Download className="w-3.5 h-3.5 text-[#315CFA]" />
+            <span className="hidden sm:inline">Export JSON</span>
+          </button>
+          <button
+            onClick={handlePrint}
+            className="btn-primary text-xs py-2 px-4 shadow-sm flex items-center gap-1.5"
+          >
+            <Printer className="w-4 h-4" />
+            <span>Print / Save as PDF</span>
+          </button>
+        </div>
       </div>
 
       {/* Printable Document Sheet */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-10 shadow-sm space-y-8 text-slate-900">
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-10 shadow-sm space-y-6 sm:space-y-8 text-slate-900">
         {/* Document Header */}
-        <div className="border-b border-slate-200 pb-6 flex items-start justify-between">
+        <div className="border-b border-slate-200 pb-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-[#315CFA] mb-1">
               ExitLab Simulation & Stress Report
             </div>
             <h1 className="text-2xl font-extrabold text-slate-950">{building.name}</h1>
-            <div className="text-xs text-slate-500 font-mono mt-1 space-x-3">
+            <div className="text-xs text-slate-500 font-mono mt-1 flex flex-wrap items-center gap-2">
               <span>Building ID: {building.id}</span>
               <span>•</span>
               <span>Generated: {new Date().toLocaleDateString()}</span>
@@ -49,7 +120,7 @@ export const ReportView: React.FC = () => {
               <span>Units: SI (Meters)</span>
             </div>
           </div>
-          <div className="text-right">
+          <div>
             <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full inline-block">
               Scale Confirmed • Geometry Reviewed
             </span>
@@ -57,8 +128,8 @@ export const ReportView: React.FC = () => {
         </div>
 
         {/* Executive Summary */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Executive Summary</h3>
+        <div className="space-y-2">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Executive Summary</h3>
           <p className="text-xs leading-relaxed text-slate-700">
             This report evaluates egress performance under baseline and disruption scenarios for{' '}
             <strong>{building.name}</strong> ({totalOccupants} nominal occupants across {floor?.rooms.length ?? 0} rooms).
@@ -68,10 +139,10 @@ export const ReportView: React.FC = () => {
         </div>
 
         {/* Baseline Metrics Table */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Baseline Evacuation Metrics</h3>
-          <div className="border border-slate-200 rounded-lg overflow-hidden">
-            <table className="w-full text-xs text-left">
+        <div className="space-y-2">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Baseline Evacuation Metrics</h3>
+          <div className="border border-slate-200 rounded-lg overflow-x-auto">
+            <table className="w-full text-xs text-left min-w-[500px]">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
                 <tr>
                   <th className="p-3">Scenario</th>
@@ -102,14 +173,14 @@ export const ReportView: React.FC = () => {
 
         {/* AI Stress Test Findings (if available) */}
         {stressTestReport && stressTestReport.findings.length > 0 && (
-          <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Meta AI Stress Findings & Identified Bottlenecks
             </h3>
             <div className="space-y-3">
               {stressTestReport.findings.map((f, idx) => (
                 <div key={f.findingId} className="p-4 border border-slate-200 rounded-lg bg-slate-50/50 space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                     <span className="font-bold text-slate-900">
                       Finding {idx + 1}: {f.comparison.scenarioName}
                     </span>
@@ -129,8 +200,8 @@ export const ReportView: React.FC = () => {
         )}
 
         {/* Modeling Assumptions */}
-        <div className="space-y-3 pt-4 border-t border-slate-100">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Modeling Assumptions</h3>
+        <div className="space-y-2 pt-4 border-t border-slate-100">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Modeling Assumptions</h3>
           <ul className="text-xs text-slate-600 list-disc list-inside space-y-1">
             <li>Single-floor 2D grid discretization with 0.25-meter spatial resolution.</li>
             <li>Fixed-timestep numerical integration (dt = 0.25 seconds).</li>
@@ -157,3 +228,4 @@ export const ReportView: React.FC = () => {
     </div>
   );
 };
+

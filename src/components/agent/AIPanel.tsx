@@ -19,7 +19,16 @@ import { useProject } from '../../context/ProjectContext';
 import { runStressTestAgent, AgentStepTrace, Finding } from '../../agent/orchestrator';
 
 export const AIPanel: React.FC = () => {
-  const { building, stressTestReport, setStressTestReport, setActiveTab, setIs3DMode, toggleDoorBlockage, setActiveScenario } = useProject();
+  const {
+    building,
+    stressTestReport,
+    setStressTestReport,
+    setActiveTab,
+    setIs3DMode,
+    toggleDoorBlockage,
+    setActiveScenario,
+    setCurrentRun,
+  } = useProject();
 
   const [budget, setBudget] = useState<number>(3);
   const [isRunning, setIsRunning] = useState<boolean>(false);
@@ -259,6 +268,7 @@ export const AIPanel: React.FC = () => {
                           e.stopPropagation();
                           const candidateRun = stressTestReport?.candidateRuns.find(r => r.runId === f.runId);
                           if (candidateRun) {
+                            setCurrentRun(candidateRun);
                             setActiveScenario(candidateRun.scenario);
                             setIs3DMode(true);
                             setActiveTab('simulation3d');

@@ -1,17 +1,17 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import {
   Play,
   Pause,
   RotateCcw,
-  FastForward,
   Clock,
   Users,
   AlertOctagon,
   CheckCircle2,
-  ShieldAlert,
+  AlertTriangle,
+  ArrowRight,
   Maximize2
 } from 'lucide-react';
 import { useProject } from '../../context/ProjectContext';
@@ -22,7 +22,8 @@ const Building3DModel: React.FC<{
   walls: Wall[];
   doors: Door[];
   blockedDoorIds: string[];
-}> = ({ walls, doors, blockedDoorIds }) => {
+  floorBounds: { minX: number; minY: number; maxX: number; maxY: number };
+}> = ({ walls, doors, blockedDoorIds, floorBounds }) => {
   const wallMeshes = useMemo(() => {
     const meshes: JSX.Element[] = [];
     const blockedSet = new Set(blockedDoorIds);
@@ -139,11 +140,17 @@ const Building3DModel: React.FC<{
     return meshes;
   }, [walls, doors, blockedDoorIds]);
 
+  // Dynamic floor dimensions
+  const fWidth = Math.max(10, floorBounds.maxX - floorBounds.minX + 8);
+  const fHeight = Math.max(10, floorBounds.maxY - floorBounds.minY + 8);
+  const centerX = (floorBounds.minX + floorBounds.maxX) / 2;
+  const centerY = (floorBounds.minY + floorBounds.maxY) / 2;
+
   return (
     <group>
-      {/* Floor Plate */}
-      <mesh position={[12, -0.05, -7]} receiveShadow>
-        <boxGeometry args={[30, 0.1, 20]} />
+      {/* Floor Plate dynamically centered */}
+      <mesh position={[centerX, -0.05, -centerY]} receiveShadow>
+        <boxGeometry args={[fWidth, 0.1, fHeight]} />
         <meshStandardMaterial color="#1e293b" roughness={0.8} />
       </mesh>
       {/* Wall Meshes */}
@@ -178,7 +185,16 @@ const Occupants3D: React.FC<{
 };
 
 export const Viewer3D: React.FC = () => {
-  const { building, currentRun, baselineRun, activeScenario, runCurrentSimulation } = useProject();
+  const {
+    building,
+    validation,
+    currentRun,
+    baselineRun,
+    activeScenario,
+    runCurrentSimulation,
+    setActiveTab,
+    setIs3DMode,
+  } = useProject();
 
   const runToReplay = currentRun || baselineRun;
   const frames = runToReplay?.frames || [];
@@ -208,106 +224,171 @@ export const Viewer3D: React.FC = () => {
   const currentFrame = frames[frameIdx] || frames[0];
   const floor = building.floors[0];
 
+  // Dynamic 3D building bounds & camera center calculation
+  const floorBounds = useMemo(() => {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    if (floor) {
+      for (const w of floor.walls) {
+        minX = Math.min(minX, w.start.x, w.end.x);
+        minY = Math.min(minY, w.start.y, w.end.y);
+        maxX = Math.max(maxX, w.start.x, w.end.x);
+        maxY = Math.max(maxY, w.start.y, w.end.y);
+      }
+    }
+    if (!isFinite(minX)) {
+      minX = 0; minY = 0; maxX = 24; maxY = 14;
+    }
+    return { minX, minY, maxX, maxY };
+  }, [floor]);
+
+  const centerX = (floorBounds.minX + floorBounds.maxX) / 2;
+  const centerY = (floorBounds.minY + floorBounds.maxY) / 2;
+  const spanX = Math.max(10, floorBounds.maxX - floorBounds.minX);
+  const spanY = Math.max(10, floorBounds.maxY - floorBounds.minY);
+  const cameraDistance = Math.max(spanX, spanY) * 1.35;
+
   return (
     <div className="flex-1 flex flex-col h-[calc(100vh-4rem)] bg-[#0D1729] select-none text-white relative overflow-hidden">
-      {/* 3D Top Overlay HUD */}
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
-        <div className="bg-[#152238]/90 backdrop-blur-md border border-[#233554] px-4 py-2 rounded-xl shadow-lg flex items-center gap-4">
-          <div>
-            <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Scenario</div>
-            <div className="text-xs font-bold text-white truncate max-w-xs">
-              {runToReplay?.scenario.name || activeScenario.name}
-            </div>
+      {/* Validation Error State Notice */}
+      {!validation.valid && (
+        <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-6 text-center">
+          <div className="w-14 h-14 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mb-4 border border-rose-500/30">
+            <AlertOctagon className="w-8 h-8" />
           </div>
-          <div className="w-[1px] h-6 bg-[#233554]" />
-          <div>
-            <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Simulated Time</div>
-            <div className="text-sm font-extrabold text-blue-400 font-mono">
-              {currentFrame ? `${currentFrame.timeSeconds.toFixed(2)}s` : '0.00s'}
-            </div>
-          </div>
+          <h3 className="text-xl font-bold text-white mb-2">3D Simulation Blocked by Validation Errors</h3>
+          <p className="text-slate-300 text-xs max-w-md leading-relaxed mb-6">
+            The active building has {validation.issues.length} geometric errors (such as degenerate walls,
+            floating doors, or unconfirmed scale). Egress routing cannot be computed until these are resolved.
+          </p>
+          <button
+            onClick={() => {
+              setIs3DMode(false);
+              setActiveTab('editor');
+            }}
+            className="btn-primary text-xs py-2.5 px-5 shadow-lg"
+          >
+            Review & Fix in 2D Floor Editor →
+          </button>
         </div>
+      )}
 
-        {/* Live Counters */}
-        <div className="bg-[#152238]/90 backdrop-blur-md border border-[#233554] px-4 py-2 rounded-xl shadow-lg flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+      {/* 3D Top Overlay HUD */}
+      <div className="absolute top-3 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        <div className="flex flex-wrap items-center gap-2 pointer-events-auto">
+          <div className="bg-[#152238]/90 backdrop-blur-md border border-[#233554] px-3.5 py-1.5 rounded-xl shadow-lg flex items-center gap-3">
             <div>
-              <div className="text-[10px] text-slate-400 font-semibold">Evacuated</div>
-              <div className="text-xs font-bold text-emerald-400 font-mono">
-                {currentFrame?.exitedCumulative ?? 0}
+              <div className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Scenario</div>
+              <div className="text-xs font-bold text-white truncate max-w-[150px] sm:max-w-xs">
+                {runToReplay?.scenario.name || activeScenario.name}
+              </div>
+            </div>
+            <div className="w-[1px] h-5 bg-[#233554]" />
+            <div>
+              <div className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Simulated Time</div>
+              <div className="text-xs sm:text-sm font-extrabold text-blue-400 font-mono">
+                {currentFrame ? `${currentFrame.timeSeconds.toFixed(2)}s` : '0.00s'}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-blue-400" />
-            <div>
-              <div className="text-[10px] text-slate-400 font-semibold">In Egress</div>
-              <div className="text-xs font-bold text-blue-400 font-mono">
-                {currentFrame?.activeCount ?? 0}
-              </div>
-            </div>
-          </div>
-
-          {(runToReplay?.metrics.unreachableCount ?? 0) > 0 && (
-            <div className="flex items-center gap-2">
-              <AlertOctagon className="w-4 h-4 text-rose-400" />
+          {/* Live Counters */}
+          <div className="bg-[#152238]/90 backdrop-blur-md border border-[#233554] px-3 py-1.5 rounded-xl shadow-lg flex items-center gap-3 text-xs">
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
               <div>
-                <div className="text-[10px] text-slate-400 font-semibold">Trapped</div>
-                <div className="text-xs font-bold text-rose-400 font-mono">
-                  {runToReplay?.metrics.unreachableCount}
+                <span className="text-[9px] text-slate-400 block font-semibold">Evacuated</span>
+                <span className="font-bold text-emerald-400 font-mono">
+                  {currentFrame?.exitedCumulative ?? 0}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-blue-400" />
+              <div>
+                <span className="text-[9px] text-slate-400 block font-semibold">In Egress</span>
+                <span className="font-bold text-blue-400 font-mono">
+                  {currentFrame?.activeCount ?? 0}
+                </span>
+              </div>
+            </div>
+
+            {(runToReplay?.metrics.unreachableCount ?? 0) > 0 && (
+              <div className="flex items-center gap-1.5">
+                <AlertOctagon className="w-3.5 h-3.5 text-rose-400" />
+                <div>
+                  <span className="text-[9px] text-slate-400 block font-semibold">Trapped</span>
+                  <span className="font-bold text-rose-400 font-mono">
+                    {runToReplay?.metrics.unreachableCount}
+                  </span>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
+
+        {/* Quick trigger if no run yet */}
+        {!runToReplay && validation.valid && (
+          <button
+            onClick={() => runCurrentSimulation()}
+            className="pointer-events-auto btn-primary text-xs py-1.5 px-3 shadow-md"
+          >
+            <Play className="w-3.5 h-3.5 fill-white" />
+            Run Simulation
+          </button>
+        )}
       </div>
 
       {/* Main 3D Canvas */}
       <div className="flex-1 w-full h-full cursor-grab active:cursor-grabbing">
         <Canvas
-          camera={{ position: [12, 18, 16], fov: 42 }}
+          camera={{ position: [centerX, cameraDistance * 0.9, -centerY + cameraDistance * 0.9], fov: 42 }}
           shadows
           gl={{ antialias: true, alpha: false }}
         >
           <color attach="background" args={['#0D1729']} />
           <ambientLight intensity={0.65} />
           <directionalLight
-            position={[15, 25, 20]}
+            position={[centerX + 15, 25, -centerY + 20]}
             intensity={1.2}
             castShadow
             shadow-mapSize={[2048, 2048]}
           />
-          <directionalLight position={[-10, 15, -15]} intensity={0.3} />
+          <directionalLight position={[centerX - 10, 15, -centerY - 15]} intensity={0.3} />
 
-          {/* Isometric Building Model & Occupants */}
+          {/* Isometric Building Model & Occupants with Dynamic Bounds */}
           {floor && (
             <Building3DModel
               walls={floor.walls}
               doors={floor.doors}
               blockedDoorIds={runToReplay?.scenario.blockedDoorIds || activeScenario.blockedDoorIds}
+              floorBounds={floorBounds}
             />
           )}
 
           {currentFrame && <Occupants3D agents={currentFrame.agents} />}
 
           <OrbitControls
-            target={[12, 1, -7]}
+            target={[centerX, 1, -centerY]}
             maxPolarAngle={Math.PI / 2.1}
-            minDistance={5}
-            maxDistance={50}
+            minDistance={4}
+            maxDistance={80}
           />
         </Canvas>
       </div>
 
       {/* Bottom Playback & Timeline Controls */}
-      <div className="h-20 bg-[#152238]/95 border-t border-[#233554] px-6 flex items-center justify-between z-10 backdrop-blur-md">
+      <div className="h-16 sm:h-20 bg-[#152238]/95 border-t border-[#233554] px-4 md:px-6 flex items-center justify-between z-10 backdrop-blur-md gap-3">
         {/* Play/Pause & Reset */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            className="w-10 h-10 rounded-xl bg-[#315CFA] hover:bg-[#2347d9] text-white flex items-center justify-center shadow-md shadow-blue-500/20 transition-all"
+            onClick={() => {
+              if (frames.length === 0 && validation.valid) {
+                runCurrentSimulation();
+              }
+              setIsPlaying(!isPlaying);
+            }}
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#315CFA] hover:bg-[#2347d9] text-white flex items-center justify-center shadow-md shadow-blue-500/20 transition-all"
             title={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white" />}
@@ -317,7 +398,7 @@ export const Viewer3D: React.FC = () => {
               setFrameIdx(0);
               setIsPlaying(true);
             }}
-            className="w-10 h-10 rounded-xl bg-[#1e293b] hover:bg-[#24344d] border border-[#2e4265] text-slate-300 flex items-center justify-center transition-colors"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#1e293b] hover:bg-[#24344d] border border-[#2e4265] text-slate-300 flex items-center justify-center transition-colors"
             title="Reset Timeline"
           >
             <RotateCcw className="w-4 h-4" />
@@ -325,8 +406,8 @@ export const Viewer3D: React.FC = () => {
         </div>
 
         {/* Scrub Slider */}
-        <div className="flex-1 mx-8 flex items-center gap-4">
-          <span className="text-xs font-mono text-slate-400">0.00s</span>
+        <div className="flex-1 mx-2 sm:mx-6 flex items-center gap-2 sm:gap-4 min-w-0">
+          <span className="text-[11px] font-mono text-slate-400 shrink-0">0.0s</span>
           <input
             type="range"
             min={0}
@@ -336,20 +417,20 @@ export const Viewer3D: React.FC = () => {
               setFrameIdx(Number(e.target.value));
               setIsPlaying(false);
             }}
-            className="flex-1 h-2 bg-[#233554] rounded-lg appearance-none cursor-pointer accent-[#315CFA]"
+            className="flex-1 h-2 bg-[#233554] rounded-lg appearance-none cursor-pointer accent-[#315CFA] min-w-16"
           />
-          <span className="text-xs font-mono text-slate-300">
+          <span className="text-[11px] font-mono text-slate-300 shrink-0">
             {frames[frames.length - 1]?.timeSeconds.toFixed(1) || '0.0'}s
           </span>
         </div>
 
         {/* Speed Controls */}
-        <div className="flex items-center gap-1.5 bg-[#0D1729] p-1 rounded-lg border border-[#233554]">
+        <div className="flex items-center gap-1 bg-[#0D1729] p-0.5 sm:p-1 rounded-lg border border-[#233554] shrink-0">
           {[0.5, 1.0, 2.0, 4.0].map(s => (
             <button
               key={s}
               onClick={() => setSpeedMultiplier(s)}
-              className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+              className={`px-1.5 sm:px-2.5 py-1 text-[11px] sm:text-xs font-bold rounded-md transition-all ${
                 speedMultiplier === s
                   ? 'bg-[#315CFA] text-white shadow-xs'
                   : 'text-slate-400 hover:text-white'

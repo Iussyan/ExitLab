@@ -11,7 +11,9 @@ import {
   Clock,
   Users,
   DoorOpen,
-  Compass
+  Compass,
+  Map,
+  Box
 } from 'lucide-react';
 import { useProject } from '../../context/ProjectContext';
 
@@ -68,28 +70,28 @@ export const Dashboard: React.FC = () => {
   ];
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 sm:space-y-8">
       {/* Hero Card */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#0D1729] via-[#152238] to-[#1e1b4b] p-8 text-white shadow-xl">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#0D1729] via-[#152238] to-[#1e1b4b] p-6 sm:p-8 text-white shadow-xl">
         <div className="relative z-10 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-400/30 text-purple-200 text-xs font-semibold mb-4">
             <Sparkles className="w-3.5 h-3.5" />
             Meta AI Developer Hackathon · Solo Developer Prototype
           </div>
-          <h2 className="text-3xl font-extrabold tracking-tight mb-3">
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-3">
             AI-Powered Evacuation Plan Stress Testing
           </h2>
-          <p className="text-slate-300 text-sm leading-relaxed mb-6">
+          <p className="text-slate-300 text-xs sm:text-sm leading-relaxed mb-6">
             Explore building failure conditions before emergencies happen. ExitLab uses a deterministic,
             physics-simplified grid engine driven by an autonomous Meta model agent that systematically discovers
             bottlenecks, isolated rooms, and blocked egress vulnerabilities.
           </p>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <button
               onClick={() => {
                 setActiveTab('agent');
               }}
-              className="btn-ai text-sm px-5 py-2.5 shadow-lg shadow-purple-500/30"
+              className="btn-ai text-xs sm:text-sm px-5 py-2.5 shadow-lg shadow-purple-500/30 justify-center"
             >
               <Sparkles className="w-4 h-4" />
               Launch Meta Stress Agent
@@ -99,7 +101,7 @@ export const Dashboard: React.FC = () => {
                 runBaselineSimulation();
                 setActiveTab('editor');
               }}
-              className="px-4 py-2.5 rounded-lg bg-white/10 hover:bg-white/15 text-white font-medium text-sm transition-colors border border-white/10 flex items-center gap-2"
+              className="px-4 py-2.5 rounded-lg bg-white/10 hover:bg-white/15 text-white font-medium text-xs sm:text-sm transition-colors border border-white/10 flex items-center justify-center gap-2"
             >
               <Play className="w-4 h-4 fill-white" />
               Run Baseline Evacuation
@@ -108,37 +110,37 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Decorative Grid Graphic */}
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 opacity-20 pointer-events-none flex items-center justify-center">
+        <div className="absolute right-0 top-0 bottom-0 w-1/3 opacity-20 pointer-events-none hidden md:flex items-center justify-center">
           <div className="w-96 h-96 rounded-full bg-blue-500 blur-3xl" />
         </div>
       </div>
 
       {/* Numerical Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between text-slate-500 text-xs font-medium mb-2">
             <span>Total Occupants</span>
             <Users className="w-4 h-4 text-blue-500" />
           </div>
-          <div className="text-2xl font-bold text-slate-900">{totalOccupants}</div>
+          <div className="text-xl sm:text-2xl font-bold text-slate-900">{totalOccupants}</div>
           <div className="text-[11px] text-slate-500 mt-1">Across {floor?.rooms.length ?? 0} designated rooms</div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between text-slate-500 text-xs font-medium mb-2">
             <span>Passable Exits</span>
             <DoorOpen className="w-4 h-4 text-emerald-500" />
           </div>
-          <div className="text-2xl font-bold text-slate-900">{exitDoors.length}</div>
+          <div className="text-xl sm:text-2xl font-bold text-slate-900">{exitDoors.length}</div>
           <div className="text-[11px] text-slate-500 mt-1">Designated outside discharge doors</div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between text-slate-500 text-xs font-medium mb-2">
-            <span>Baseline Clearance Time</span>
+            <span>Baseline Clearance</span>
             <Clock className="w-4 h-4 text-purple-500" />
           </div>
-          <div className="text-2xl font-bold text-slate-900">
+          <div className="text-xl sm:text-2xl font-bold text-slate-900">
             {baselineRun?.metrics.clearanceTimeSeconds ? `${baselineRun.metrics.clearanceTimeSeconds}s` : 'Pending'}
           </div>
           <div className="text-[11px] text-slate-500 mt-1">
@@ -146,12 +148,12 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between text-slate-500 text-xs font-medium mb-2">
             <span>Critical Bottlenecks</span>
             <Compass className="w-4 h-4 text-rose-500" />
           </div>
-          <div className="text-2xl font-bold text-slate-900">
+          <div className="text-xl sm:text-2xl font-bold text-slate-900">
             {currentRun?.metrics.bottleneckCells.length ?? 0}
           </div>
           <div className="text-[11px] text-slate-500 mt-1">
@@ -162,14 +164,14 @@ export const Dashboard: React.FC = () => {
 
       {/* Preset Buildings Section */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
           <div>
-            <h3 className="font-bold text-slate-900 text-lg">Verified Architectural Presets</h3>
+            <h3 className="font-bold text-slate-900 text-base sm:text-lg">Verified Architectural Presets</h3>
             <p className="text-xs text-slate-500">Select a self-authored synthetic floor plan to test immediately</p>
           </div>
           <button
             onClick={() => setActiveTab('import')}
-            className="text-xs font-semibold text-[#315CFA] hover:underline"
+            className="text-xs font-semibold text-[#315CFA] hover:underline self-start sm:self-auto"
           >
             Import Custom Plan (PDF / Image) →
           </button>
@@ -201,11 +203,44 @@ export const Dashboard: React.FC = () => {
                   <h4 className="font-bold text-sm text-slate-900 mb-1">{preset.name}</h4>
                   <p className="text-xs text-slate-500 leading-relaxed mb-4">{preset.description}</p>
                 </div>
-                <div className="flex items-center justify-between text-xs pt-3 border-t border-slate-100">
-                  <span className={`font-semibold ${isSelected ? 'text-[#315CFA]' : 'text-slate-500'}`}>
-                    {isSelected ? 'Active Plan' : 'Load Fixture'}
-                  </span>
-                  <ArrowRight className={`w-3.5 h-3.5 ${isSelected ? 'text-[#315CFA]' : 'text-slate-400'}`} />
+
+                <div className="space-y-2 pt-3 border-t border-slate-100">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className={`font-semibold ${isSelected ? 'text-[#315CFA]' : 'text-slate-500'}`}>
+                      {isSelected ? '✓ Active Plan' : 'Click to Select'}
+                    </span>
+                    <ArrowRight className={`w-3.5 h-3.5 ${isSelected ? 'text-[#315CFA]' : 'text-slate-400'}`} />
+                  </div>
+
+                  {/* Direct Action Buttons */}
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        loadFixture(preset.id);
+                        setIs3DMode(false);
+                        setActiveTab('editor');
+                      }}
+                      className="flex-1 py-1 px-2 rounded bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[11px] font-semibold text-slate-700 flex items-center justify-center gap-1 transition-colors"
+                      title="Inspect 2D Geometry"
+                    >
+                      <Map className="w-3 h-3 text-slate-500" />
+                      2D Canvas
+                    </button>
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        loadFixture(preset.id);
+                        setIs3DMode(true);
+                        setActiveTab('simulation3d');
+                      }}
+                      className="flex-1 py-1 px-2 rounded bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[11px] font-semibold text-[#315CFA] flex items-center justify-center gap-1 transition-colors"
+                      title="Simulate in 3D"
+                    >
+                      <Box className="w-3 h-3 text-[#315CFA]" />
+                      3D Cutaway
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -214,7 +249,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Safety and Scientific Disclaimer Banner */}
-      <div className="bg-slate-50 border border-slate-200 rounded-xl p-6">
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 sm:p-6">
         <div className="flex items-start gap-4">
           <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
             <ShieldAlert className="w-5 h-5" />
@@ -236,3 +271,4 @@ export const Dashboard: React.FC = () => {
     </div>
   );
 };
+
