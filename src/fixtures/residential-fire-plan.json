@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "id": "residential-fire-plan",
+  "name": "Single-Story Residence — Home Fire & Emergency Plan",
+  "units": "m",
+  "importProvenance": {
+    "format": "png",
+    "sourceName": "home_fire_and_emergency_plan.png",
+    "scaleConfirmed": true,
+    "geometryReviewed": true
+  },
+  "floors": [
+    {
+      "id": "floor-0",
+      "elevationM": 0,
+      "walls": [
+        { "id": "w-exit-landing", "start": { "x": 3.5, "y": 20.0 }, "end": { "x": 5.0, "y": 20.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-living-n", "start": { "x": 5.0, "y": 20.0 }, "end": { "x": 16.0, "y": 20.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-balcony-n", "start": { "x": 16.0, "y": 20.0 }, "end": { "x": 18.0, "y": 20.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-balcony-e", "start": { "x": 18.0, "y": 20.0 }, "end": { "x": 18.0, "y": 14.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-balcony-s", "start": { "x": 16.0, "y": 14.0 }, "end": { "x": 18.0, "y": 14.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-kitchen-w", "start": { "x": 1.5, "y": 14.0 }, "end": { "x": 1.5, "y": 17.5 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-kitchen-n", "start": { "x": 1.5, "y": 17.5 }, "end": { "x": 5.0, "y": 17.5 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-kitchen-e", "start": { "x": 5.0, "y": 14.0 }, "end": { "x": 5.0, "y": 17.5 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-kitchen-s", "start": { "x": 1.5, "y": 14.0 }, "end": { "x": 5.0, "y": 14.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-exit-wall-w", "start": { "x": 3.5, "y": 17.5 }, "end": { "x": 3.5, "y": 20.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-bedw-w", "start": { "x": 1.5, "y": 10.0 }, "end": { "x": 1.5, "y": 14.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-bedw-s", "start": { "x": 1.5, "y": 10.0 }, "end": { "x": 5.0, "y": 10.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-bedw-e", "start": { "x": 5.0, "y": 10.0 }, "end": { "x": 5.0, "y": 14.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-study-w", "start": { "x": 3.5, "y": 4.5 }, "end": { "x": 3.5, "y": 10.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-study-s", "start": { "x": 3.5, "y": 4.5 }, "end": { "x": 6.5, "y": 4.5 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-study-e", "start": { "x": 6.5, "y": 4.5 }, "end": { "x": 6.5, "y": 10.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-bedm-n", "start": { "x": 9.0, "y": 14.0 }, "end": { "x": 18.0, "y": 14.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-bedm-w", "start": { "x": 9.0, "y": 9.5 }, "end": { "x": 9.0, "y": 14.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-bedm-s", "start": { "x": 9.0, "y": 9.5 }, "end": { "x": 16.0, "y": 9.5 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-wcm-divider", "start": { "x": 16.0, "y": 9.5 }, "end": { "x": 16.0, "y": 14.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-wcm-e", "start": { "x": 18.0, "y": 9.5 }, "end": { "x": 18.0, "y": 14.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-bedse-w", "start": { "x": 10.5, "y": 4.5 }, "end": { "x": 10.5, "y": 9.5 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-bedse-e", "start": { "x": 18.0, "y": 4.5 }, "end": { "x": 18.0, "y": 9.5 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-bedse-s", "start": { "x": 10.5, "y": 4.5 }, "end": { "x": 18.0, "y": 4.5 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-wcc-w", "start": { "x": 6.5, "y": 4.5 }, "end": { "x": 6.5, "y": 7.5 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-wcc-n", "start": { "x": 6.5, "y": 7.5 }, "end": { "x": 9.5, "y": 7.5 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-wcc-e", "start": { "x": 9.5, "y": 4.5 }, "end": { "x": 9.5, "y": 7.5 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-garden-w", "start": { "x": 6.5, "y": 1.0 }, "end": { "x": 6.5, "y": 4.5 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-garden-s", "start": { "x": 6.5, "y": 1.0 }, "end": { "x": 10.5, "y": 1.0 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-garden-e", "start": { "x": 10.5, "y": 1.0 }, "end": { "x": 10.5, "y": 4.5 }, "thicknessM": 0.25, "heightM": 3.0 },
+        { "id": "w-garden-n", "start": { "x": 6.5, "y": 4.5 }, "end": { "x": 10.5, "y": 4.5 }, "thicknessM": 0.25, "heightM": 3.0 }
+      ],
+      "doors": [
+        { "id": "d-exit-stairs", "wallId": "w-exit-landing", "offsetM": 0.15, "widthM": 1.2, "passable": true, "kind": "exit", "connectsRoomIds": ["r-living"] },
+        { "id": "d-kitchen", "wallId": "w-kitchen-e", "offsetM": 1.5, "widthM": 0.9, "passable": true, "kind": "interior", "connectsRoomIds": ["r-kitchen", "r-living"] },
+        { "id": "d-bedw", "wallId": "w-bedw-e", "offsetM": 1.2, "widthM": 0.9, "passable": true, "kind": "interior", "connectsRoomIds": ["r-bed-west"] },
+        { "id": "d-study", "wallId": "w-study-e", "offsetM": 3.5, "widthM": 0.9, "passable": true, "kind": "interior", "connectsRoomIds": ["r-study"] },
+        { "id": "d-bedm", "wallId": "w-bedm-w", "offsetM": 1.5, "widthM": 0.95, "passable": true, "kind": "interior", "connectsRoomIds": ["r-bed-master"] },
+        { "id": "d-wcm", "wallId": "w-wcm-divider", "offsetM": 1.5, "widthM": 0.85, "passable": true, "kind": "interior", "connectsRoomIds": ["r-wc-master", "r-bed-master"] },
+        { "id": "d-bedse", "wallId": "w-bedse-w", "offsetM": 2.2, "widthM": 0.95, "passable": true, "kind": "interior", "connectsRoomIds": ["r-bed-se"] },
+        { "id": "d-wcc", "wallId": "w-wcc-n", "offsetM": 1.0, "widthM": 0.85, "passable": true, "kind": "interior", "connectsRoomIds": ["r-wc-central"] },
+        { "id": "d-garden", "wallId": "w-garden-n", "offsetM": 3.0, "widthM": 0.9, "passable": true, "kind": "interior", "connectsRoomIds": ["r-garden", "r-corridor"] }
+      ],
+      "rooms": [
+        {
+          "id": "r-living",
+          "name": "Living Room",
+          "outline": [{ "x": 5.1, "y": 14.1 }, { "x": 15.9, "y": 14.1 }, { "x": 15.9, "y": 19.9 }, { "x": 5.1, "y": 19.9 }],
+          "occupants": 6
+        },
+        {
+          "id": "r-corridor",
+          "name": "Central Hallway & Egress Corridor",
+          "outline": [
+            { "x": 5.0, "y": 14.2 },
+            { "x": 9.0, "y": 14.2 },
+            { "x": 9.0, "y": 9.5 },
+            { "x": 10.5, "y": 9.5 },
+            { "x": 10.5, "y": 4.5 },
+            { "x": 9.5, "y": 4.5 },
+            { "x": 9.5, "y": 7.5 },
+            { "x": 6.5, "y": 7.5 },
+            { "x": 6.5, "y": 9.5 },
+            { "x": 5.0, "y": 9.5 }
+          ],
+          "occupants": 0
+        },
+        {
+          "id": "r-balcony",
+          "name": "Balcony",
+          "outline": [{ "x": 16.1, "y": 14.1 }, { "x": 17.9, "y": 14.1 }, { "x": 17.9, "y": 19.9 }, { "x": 16.1, "y": 19.9 }],
+          "occupants": 2
+        },
+        {
+          "id": "r-kitchen",
+          "name": "Kitchen",
+          "outline": [{ "x": 1.6, "y": 14.1 }, { "x": 4.9, "y": 14.1 }, { "x": 4.9, "y": 17.4 }, { "x": 1.6, "y": 17.4 }],
+          "occupants": 2
+        },
+        {
+          "id": "r-bed-west",
+          "name": "West Bedroom",
+          "outline": [{ "x": 1.6, "y": 10.1 }, { "x": 4.9, "y": 10.1 }, { "x": 4.9, "y": 13.9 }, { "x": 1.6, "y": 13.9 }],
+          "occupants": 2
+        },
+        {
+          "id": "r-study",
+          "name": "Study",
+          "outline": [{ "x": 3.6, "y": 4.6 }, { "x": 6.4, "y": 4.6 }, { "x": 6.4, "y": 9.9 }, { "x": 3.6, "y": 9.9 }],
+          "occupants": 2
+        },
+        {
+          "id": "r-bed-master",
+          "name": "Master Bedroom",
+          "outline": [{ "x": 9.1, "y": 9.6 }, { "x": 15.9, "y": 9.6 }, { "x": 15.9, "y": 13.9 }, { "x": 9.1, "y": 13.9 }],
+          "occupants": 3
+        },
+        {
+          "id": "r-wc-master",
+          "name": "Master En-suite WC",
+          "outline": [{ "x": 16.1, "y": 9.6 }, { "x": 17.9, "y": 9.6 }, { "x": 17.9, "y": 13.9 }, { "x": 16.1, "y": 13.9 }],
+          "occupants": 1
+        },
+        {
+          "id": "r-bed-se",
+          "name": "Southeast Bedroom",
+          "outline": [{ "x": 10.6, "y": 4.6 }, { "x": 17.9, "y": 4.6 }, { "x": 17.9, "y": 9.4 }, { "x": 10.6, "y": 9.4 }],
+          "occupants": 2
+        },
+        {
+          "id": "r-wc-central",
+          "name": "Central WC",
+          "outline": [{ "x": 6.6, "y": 4.6 }, { "x": 9.4, "y": 4.6 }, { "x": 9.4, "y": 7.4 }, { "x": 6.6, "y": 7.4 }],
+          "occupants": 1
+        },
+        {
+          "id": "r-garden",
+          "name": "Hanging Garden",
+          "outline": [{ "x": 6.6, "y": 1.1 }, { "x": 10.4, "y": 1.1 }, { "x": 10.4, "y": 4.4 }, { "x": 6.6, "y": 4.4 }],
+          "occupants": 1
+        }
+      ],
+      "exits": [
+        { "id": "exit-stairs-1", "doorId": "d-exit-stairs", "destination": "outside" }
+      ],
+      "obstacles": [],
+      "fixtures": [
+        { "id": "fe-living", "kind": "fire_extinguisher", "position": { "x": 10.5, "y": 19.8 }, "rotationDeg": 0, "label": "Fire Extinguisher (Living Room)" },
+        { "id": "fe-kitchen", "kind": "fire_extinguisher", "position": { "x": 5.3, "y": 14.3 }, "rotationDeg": 0, "label": "Fire Extinguisher (Kitchen Hallway)" },
+        { "id": "fe-master", "kind": "fire_extinguisher", "position": { "x": 10.8, "y": 9.3 }, "rotationDeg": 0, "label": "Fire Extinguisher (Master Corridor)" },
+        { "id": "fe-wc", "kind": "fire_extinguisher", "position": { "x": 9.7, "y": 6.2 }, "rotationDeg": 0, "label": "Fire Extinguisher (WC Corridor)" },
+        { "id": "arrow-wc-north", "kind": "egress_arrow", "position": { "x": 9.9, "y": 5.5 }, "rotationDeg": 90, "label": "Egress North" },
+        { "id": "arrow-corr-west", "kind": "egress_arrow", "position": { "x": 8.5, "y": 8.5 }, "rotationDeg": 180, "label": "Egress West" },
+        { "id": "arrow-hall-north", "kind": "egress_arrow", "position": { "x": 7.5, "y": 11.5 }, "rotationDeg": 90, "label": "Egress North" },
+        { "id": "arrow-living-north", "kind": "egress_arrow", "position": { "x": 6.5, "y": 16.5 }, "rotationDeg": 90, "label": "Egress North" },
+        { "id": "arrow-exit-west", "kind": "egress_arrow", "position": { "x": 4.8, "y": 19.5 }, "rotationDeg": 180, "label": "Egress to Exit Stairs" },
+        { "id": "stairs-exit", "kind": "stairs", "position": { "x": 2.2, "y": 20.0 }, "rotationDeg": 0, "label": "Emergency Exit Stairs" },
+        { "id": "sign-exit", "kind": "exit_sign", "position": { "x": 3.2, "y": 20.5 }, "rotationDeg": 0, "label": "Exit Sign" }
+      ]
+    }
+  ]
+}

@@ -17,7 +17,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { useProject } from '../../context/ProjectContext';
-import { Wall, Door, Room } from '../../schemas/building';
+import { Wall, Door, Room, SafetyFixture } from '../../schemas/building';
 import { SimulationFrame, AgentTracePoint } from '../../simulation/types';
 
 // Component to render 3D Building Floor, Extruded Walls, Exit Mats, & Room Labels
@@ -25,9 +25,10 @@ const Building3DModel: React.FC<{
   walls: Wall[];
   doors: Door[];
   rooms: Room[];
+  fixtures?: SafetyFixture[];
   blockedDoorIds: string[];
   floorBounds: { minX: number; minY: number; maxX: number; maxY: number };
-}> = ({ walls, doors, rooms, blockedDoorIds, floorBounds }) => {
+}> = ({ walls, doors, rooms, fixtures = [], blockedDoorIds, floorBounds }) => {
   const blockedSet = useMemo(() => new Set(blockedDoorIds), [blockedDoorIds]);
 
   const { wallMeshes, exitMats, blockedBarriers } = useMemo(() => {
@@ -244,6 +245,115 @@ const Building3DModel: React.FC<{
     });
   }, [rooms]);
 
+  // Render 3D Safety Fixtures (Fire Extinguishers, Egress Arrows, Stairs)
+  const fixtureElements = useMemo(() => {
+    return fixtures.map(f => {
+      if (f.kind === 'fire_extinguisher') {
+        return (
+          <group key={`fixture-${f.id}`} position={[f.position.x, 1.05, -f.position.y]}>
+            {/* Extinguisher Cylinder Body */}
+            <mesh castShadow position={[0, 0, 0]}>
+              <cylinderGeometry args={[0.08, 0.08, 0.42, 16]} />
+              <meshStandardMaterial color="#dc2626" roughness={0.3} metalness={0.4} />
+            </mesh>
+            {/* Metallic Neck & Valve */}
+            <mesh position={[0, 0.25, 0]}>
+              <cylinderGeometry args={[0.03, 0.03, 0.08, 12]} />
+              <meshStandardMaterial color="#cbd5e1" roughness={0.2} metalness={0.9} />
+            </mesh>
+            {/* Gauge */}
+            <mesh position={[0.04, 0.26, 0.03]} rotation={[0, 0, -Math.PI / 4]}>
+              <cylinderGeometry args={[0.02, 0.02, 0.02, 10]} />
+              <meshStandardMaterial color="#10b981" emissive="#10b981" emissiveIntensity={0.5} />
+            </mesh>
+            {/* Wall Mount Bracket */}
+            <mesh position={[0, 0, -0.09]}>
+              <boxGeometry args={[0.06, 0.48, 0.02]} />
+              <meshStandardMaterial color="#475569" metalness={0.8} />
+            </mesh>
+            {/* Label */}
+            <Text
+              position={[0, 0.38, 0]}
+              rotation={[0, 0, 0]}
+              fontSize={0.11}
+              color="#ef4444"
+              anchorX="center"
+              anchorY="bottom"
+            >
+              EXTINGUISHER
+            </Text>
+          </group>
+        );
+      }
+
+      if (f.kind === 'egress_arrow') {
+        const rotRad = ((f.rotationDeg || 0) * Math.PI) / 180;
+        return (
+          <group
+            key={`fixture-${f.id}`}
+            position={[f.position.x, 0.03, -f.position.y]}
+            rotation={[0, rotRad - Math.PI / 2, 0]}
+          >
+            {/* Glowing Arrow Shaft */}
+            <mesh position={[-0.1, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+              <planeGeometry args={[0.22, 0.09]} />
+              <meshStandardMaterial
+                color="#10b981"
+                emissive="#34d399"
+                emissiveIntensity={0.8}
+                transparent
+                opacity={0.9}
+              />
+            </mesh>
+            {/* Glowing Arrow Head */}
+            <mesh position={[0.06, 0, 0]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]}>
+              <coneGeometry args={[0.13, 0.2, 3]} />
+              <meshStandardMaterial
+                color="#10b981"
+                emissive="#34d399"
+                emissiveIntensity={0.8}
+                transparent
+                opacity={0.9}
+              />
+            </mesh>
+          </group>
+        );
+      }
+
+      if (f.kind === 'stairs') {
+        return (
+          <group key={`fixture-${f.id}`} position={[f.position.x, 0, -f.position.y]}>
+            {/* 4-tier extruded emergency staircase */}
+            {[0, 1, 2, 3].map(stepIdx => (
+              <mesh
+                key={`step-${stepIdx}`}
+                position={[stepIdx * 0.35, (stepIdx + 0.5) * 0.16, 0]}
+                receiveShadow
+                castShadow
+              >
+                <boxGeometry args={[0.35, (stepIdx + 1) * 0.16, 1.4]} />
+                <meshStandardMaterial color="#334155" roughness={0.7} metalness={0.3} />
+              </mesh>
+            ))}
+            {/* Stairs Railing & Beacon */}
+            <Text
+              position={[0.5, 0.9, 0]}
+              rotation={[0, 0, 0]}
+              fontSize={0.2}
+              color="#38bdf8"
+              anchorX="center"
+              anchorY="bottom"
+            >
+              EXIT STAIRS
+            </Text>
+          </group>
+        );
+      }
+
+      return null;
+    });
+  }, [fixtures]);
+
   return (
     <group>
       {/* Dark Architectural Floor Slab */}
@@ -283,6 +393,9 @@ const Building3DModel: React.FC<{
 
       {/* Floor Room Blueprint Labels */}
       {roomLabels}
+
+      {/* 3D Safety Fixtures (Extinguishers, Arrows, Stairs) */}
+      {fixtureElements}
     </group>
   );
 };
@@ -735,6 +848,7 @@ export const Viewer3D: React.FC = () => {
               walls={floor.walls}
               doors={floor.doors}
               rooms={floor.rooms}
+              fixtures={floor.fixtures}
               blockedDoorIds={runToReplay?.scenario.blockedDoorIds || activeScenario.blockedDoorIds}
               floorBounds={floorBounds}
             />

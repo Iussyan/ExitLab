@@ -60,6 +60,25 @@ export const ObstacleSchema = z.object({
 });
 export type Obstacle = z.infer<typeof ObstacleSchema>;
 
+// Safety Fixture definition (Extinguishers, Egress Arrows, Stairs, Signage)
+export const SafetyFixtureKindSchema = z.enum([
+  'fire_extinguisher',
+  'egress_arrow',
+  'stairs',
+  'exit_sign',
+  'alarm_pull_station',
+]);
+export type SafetyFixtureKind = z.infer<typeof SafetyFixtureKindSchema>;
+
+export const SafetyFixtureSchema = z.object({
+  id: z.string().min(1, 'Fixture ID cannot be empty'),
+  kind: SafetyFixtureKindSchema,
+  position: Point2Schema,
+  rotationDeg: z.number().default(0),
+  label: z.string().optional(),
+});
+export type SafetyFixture = z.infer<typeof SafetyFixtureSchema>;
+
 // Floor definition
 export const FloorSchema = z.object({
   id: z.string().min(1, 'Floor ID cannot be empty'),
@@ -69,6 +88,7 @@ export const FloorSchema = z.object({
   rooms: z.array(RoomSchema),
   exits: z.array(ExitSchema),
   obstacles: z.array(ObstacleSchema).default([]),
+  fixtures: z.array(SafetyFixtureSchema).default([]),
 });
 export type Floor = z.infer<typeof FloorSchema>;
 
@@ -247,6 +267,13 @@ export function validateBuildingGeometry(building: Building): ValidationResult {
         message: `Obstacle "${obstacle.id}" outline must contain at least 3 vertices`,
         targetId: obstacle.id,
       });
+    }
+  }
+
+  // Safety Fixtures check (if provided)
+  if (floor.fixtures) {
+    for (const fixture of floor.fixtures) {
+      registerId(fixture.id, 'fixture');
     }
   }
 

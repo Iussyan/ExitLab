@@ -36,6 +36,14 @@ export const Dashboard: React.FC = () => {
 
   const presets = [
     {
+      id: 'residential-fire-plan',
+      name: 'Residential Emergency & Fire Plan',
+      tag: 'AI Vectorized 3D Plan',
+      description: 'Single-story home with 10 rooms, 4 fire extinguishers, illuminated egress guidance, and emergency stairwell discharge.',
+      icon: ShieldAlert,
+      badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
+    },
+    {
       id: 'simple-school',
       name: 'Oakridge Academy Science Wing',
       tag: 'Verified Benchmark',

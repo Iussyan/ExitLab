@@ -84,6 +84,12 @@
   - Code-split heavy views (`Viewer3D`, `FloorEditor2D`, `ReportView`, `AIPanel`, `BenchmarkView`, `ResultsView`, `ImportWizard`) using `React.lazy()` and `<Suspense>`.
   - Built architectural blueprint `<ViewSkeleton />` with pulsing coordinate engine indicator, shimmering progress bar, and darkroom grid styling.
   - Optimized Vite Rollup chunking (`vendor-three`, `vendor-r3f`, `vendor-icons`, `vendor-zod`), shrinking the initial JavaScript bundle from 1,315.7 kB down to 45.9 kB (gzipped 14.7 kB) and eliminating large chunk warnings.
-  - Implemented `AbortSignal` cancellation support in `orchestrator.ts` and `AIPanel.tsx` with non-blocking UI thread yields, "Cancel Stress Search" action button, live progress bar (`Scenario X of Y`), and partial findings preservation.
   - Added automated unit test verifying clean agent abort execution (27/27 tests passing).
+- 2026-10-29: Intelligent Floor Plan Image Detection, Labeling & 3D Vectorization Engine (/goal):
+  - Added `SafetyFixtureSchema` (`fire_extinguisher`, `egress_arrow`, `stairs`, `exit_sign`, `alarm_pull_station`) to `FloorSchema` in `src/schemas/building.ts`.
+  - Built `src/services/planDetector.ts`: Computer Vision pixel analysis extracting walls, doors, rooms, red fire extinguisher clusters, green egress guidance arrows, and emergency stairwell landings.
+  - Created and verified canonical benchmark fixture [residential-fire-plan.json](file:///d:/Users/QCU/Documents/ExitLab/src/fixtures/residential-fire-plan.json) representing the user's uploaded "Home Fire and Emergency Plan".
+  - Overhauled [ImportWizard.tsx](file:///d:/Users/QCU/Documents/ExitLab/src/components/import/ImportWizard.tsx) with interactive CAD overlay layers (`Walls`, `Doors & Exits`, `Rooms & Labels`, `Safety Equipment`), real-time detection statistics, and 1-click "Convert to 3D Plan & Run Simulation" action.
+  - Upgraded [Viewer3D.tsx](file:///d:/Users/QCU/Documents/ExitLab/src/components/viewer3d/Viewer3D.tsx) to render realistic 3D Fire Extinguishers (cylindrical red body, silver valve, gauge, wall bracket, label), glowing green illuminated floor egress arrows with direction heading, and extruded emergency stairwell steps.
+  - Added automated unit test suite in [tests/planDetector.test.ts](file:///d:/Users/QCU/Documents/ExitLab/tests/planDetector.test.ts) verifying feature extraction, 100% egress evacuation (22/22 occupants in 18.5s), and Meta AI stress-testing on detected plans (30/30 tests passing).
 

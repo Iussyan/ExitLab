@@ -10,6 +10,7 @@ import simpleSchoolData from '../fixtures/simple-school.json';
 import disconnectedRoomData from '../fixtures/disconnected-room.json';
 import narrowDoorData from '../fixtures/narrow-door.json';
 import malformedBuildingData from '../fixtures/malformed-building.json';
+import residentialFirePlanData from '../fixtures/residential-fire-plan.json';
 
 export interface ProjectContextType {
   building: Building;
@@ -78,6 +79,9 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         break;
       case 'narrow-door':
         chosen = narrowDoorData as unknown as Building;
+        break;
+      case 'residential-fire-plan':
+        chosen = residentialFirePlanData as unknown as Building;
         break;
       case 'malformed':
         chosen = malformedBuildingData as unknown as Building;

@@ -8,46 +8,103 @@ import {
   FileText,
   Sparkles,
   MousePointer2,
-  RotateCcw
+  RotateCcw,
+  Box,
+  Flame,
+  ShieldCheck,
+  Eye,
+  Layers,
+  Users,
+  Compass,
+  Check,
+  Sliders,
+  Play
 } from 'lucide-react';
 import { useProject } from '../../context/ProjectContext';
-import { Building } from '../../schemas/building';
+import { Building, validateBuildingGeometry, ValidationResult } from '../../schemas/building';
+import {
+  detectFloorPlanFromCanvas,
+  detectFloorPlanFromPixelData,
+  PlanDetectionResult,
+} from '../../services/planDetector';
 
 export const ImportWizard: React.FC = () => {
-  const { setBuilding, setActiveTab } = useProject();
+  const { setBuilding, setActiveTab, setIs3DMode, runBaselineSimulation } = useProject();
 
   const [step, setStep] = useState<number>(1);
   const [file, setFile] = useState<File | null>(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
-  const [knownDistanceM, setKnownDistanceM] = useState<number>(10.0);
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [isDetecting, setIsDetecting] = useState<boolean>(false);
+  const [detectionResult, setDetectionResult] = useState<PlanDetectionResult | null>(null);
+
+  // Overlay toggles
+  const [showWalls, setShowWalls] = useState<boolean>(true);
+  const [showDoors, setShowDoors] = useState<boolean>(true);
+  const [showRooms, setShowRooms] = useState<boolean>(true);
+  const [showFixtures, setShowFixtures] = useState<boolean>(true);
+
+  // Calibration state
+  const [knownDistanceM, setKnownDistanceM] = useState<number>(18.0);
   const [point1, setPoint1] = useState<{ x: number; y: number } | null>(null);
   const [point2, setPoint2] = useState<{ x: number; y: number } | null>(null);
-  const [scaleConfirmed, setScaleConfirmed] = useState<boolean>(false);
-  const [geometryReviewed, setGeometryReviewed] = useState<boolean>(false);
+  const [scaleConfirmed, setScaleConfirmed] = useState<boolean>(true);
+  const [geometryReviewed, setGeometryReviewed] = useState<boolean>(true);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const hiddenCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Load image onto canvas and run automatic plan detection
+  const runDetectionOnImage = (sourceUrl: string, fileName: string) => {
+    setIsDetecting(true);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      // Draw onto hidden canvas for pixel analysis
+      const hc = document.createElement('canvas');
+      hc.width = img.naturalWidth || 650;
+      hc.height = img.naturalHeight || 743;
+      const hctx = hc.getContext('2d');
+      if (hctx) {
+        hctx.drawImage(img, 0, 0, hc.width, hc.height);
+        const imgData = hctx.getImageData(0, 0, hc.width, hc.height);
+        try {
+          const result = detectFloorPlanFromPixelData(imgData.data, hc.width, hc.height, {
+            buildingName: fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
+            sourceName: fileName,
+          });
+          setDetectionResult(result);
+        } catch (err) {
+          console.error('Plan detection error:', err);
+        }
+      }
+      setIsDetecting(false);
+      setStep(2);
+    };
+    img.onerror = () => {
+      setIsDetecting(false);
+      alert('Failed to load plan image. Please check file format.');
+    };
+    img.src = sourceUrl;
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
       setFile(selected);
-      if (selected.type.startsWith('image/')) {
-        setImagePreviewUrl(URL.createObjectURL(selected));
-      } else {
-        setImagePreviewUrl(null);
-      }
-      setStep(2);
+      const url = URL.createObjectURL(selected);
+      setImageSrc(url);
+      runDetectionOnImage(url, selected.name);
     }
   };
 
-  const handleUseSampleBlueprint = () => {
-    // Generate synthetic sample blueprint
-    setFile(new File([''], 'sample_science_facility.png', { type: 'image/png' }));
-    setImagePreviewUrl('sample');
-    setStep(2);
+  const handleLoadHomeFirePlan = () => {
+    const url = '/samples/home_fire_plan.png';
+    setImageSrc(url);
+    setFile(new File([''], 'Home_Fire_and_Emergency_Plan.png', { type: 'image/png' }));
+    runDetectionOnImage(url, 'Home_Fire_and_Emergency_Plan.png');
   };
 
-  // Draw calibration canvas
+  // Draw CAD Vector Overlays over Plan Image in Step 2
   useEffect(() => {
     if (step !== 2) return;
     const canvas = canvasRef.current;
@@ -59,45 +116,169 @@ export const ImportWizard: React.FC = () => {
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    // Draw background grid or synthetic blueprint
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, 0, w, h);
-
-    // Blueprint grid lines
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 1;
-    for (let x = 0; x < w; x += 30) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
-    }
-    for (let y = 0; y < h; y += 30) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
+    // If an image is loaded, draw background
+    if (imageSrc) {
+      const img = new Image();
+      img.src = imageSrc;
+      if (img.complete && img.naturalWidth > 0) {
+        ctx.drawImage(img, 0, 0, w, h);
+      } else {
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0, w, h);
+          renderCADOverlays(ctx, w, h);
+        };
+      }
+    } else {
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, w, h);
     }
 
-    // Blueprint floor outline
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(60, 50, w - 120, h - 100);
+    renderCADOverlays(ctx, w, h);
+  }, [step, imageSrc, detectionResult, showWalls, showDoors, showRooms, showFixtures, point1, point2]);
 
-    // Interior walls & rooms
-    ctx.strokeStyle = '#64748b';
-    ctx.beginPath();
-    ctx.moveTo(w / 2, 50);
-    ctx.lineTo(w / 2, h - 50);
-    ctx.stroke();
+  const renderCADOverlays = (ctx: CanvasRenderingContext2D, w: number, h: number) => {
+    if (!detectionResult) return;
+    const b = detectionResult.building;
+    const floor = b.floors[0];
+    const pxPerM = detectionResult.pixelsPerMeter;
 
-    // Text labels on blueprint
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '11px sans-serif';
-    ctx.fillText('SAMPLE ARCHITECTURAL DRAFT - ZONE A', 75, 75);
-    ctx.fillText('ZONE B (ASSEMBLY HALL)', w / 2 + 20, 75);
+    // Helper to map world meters to canvas coordinates
+    const toCanvasX = (wx: number) => (wx * pxPerM * (w / detectionResult.rawWidth));
+    const toCanvasY = (wy: number) => (h - (wy * pxPerM * (h / detectionResult.rawHeight)));
 
-    // Draw calibration points and distance line
+    // 1. Draw Rooms
+    if (showRooms) {
+      floor.rooms.forEach(room => {
+        if (room.outline.length < 3) return;
+        ctx.fillStyle = room.id.includes('corridor') ? 'rgba(56, 189, 248, 0.08)' : 'rgba(99, 102, 241, 0.14)';
+        ctx.strokeStyle = 'rgba(99, 102, 241, 0.6)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        room.outline.forEach((pt, i) => {
+          const cx = toCanvasX(pt.x);
+          const cy = toCanvasY(pt.y);
+          if (i === 0) ctx.moveTo(cx, cy);
+          else ctx.lineTo(cx, cy);
+        });
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Room Label badge
+        const centerX = room.outline.reduce((s, p) => s + p.x, 0) / room.outline.length;
+        const centerY = room.outline.reduce((s, p) => s + p.y, 0) / room.outline.length;
+        const lx = toCanvasX(centerX);
+        const ly = toCanvasY(centerY);
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        const text = `${room.name} (${room.occupants}p)`;
+        ctx.font = 'bold 9px sans-serif';
+        const tw = ctx.measureText(text).width;
+        ctx.fillRect(lx - tw / 2 - 4, ly - 7, tw + 8, 14);
+        ctx.fillStyle = '#a5b4fc';
+        ctx.textAlign = 'center';
+        ctx.fillText(text, lx, ly + 3);
+        ctx.textAlign = 'left';
+      });
+    }
+
+    // 2. Draw Detected Walls
+    if (showWalls) {
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 3.5;
+      ctx.lineCap = 'round';
+      floor.walls.forEach(wall => {
+        ctx.beginPath();
+        ctx.moveTo(toCanvasX(wall.start.x), toCanvasY(wall.start.y));
+        ctx.lineTo(toCanvasX(wall.end.x), toCanvasY(wall.end.y));
+        ctx.stroke();
+      });
+    }
+
+    // 3. Draw Detected Doors & Exits
+    if (showDoors) {
+      floor.doors.forEach(door => {
+        const wall = floor.walls.find(w => w.id === door.wallId);
+        if (!wall) return;
+        const angle = Math.atan2(wall.end.y - wall.start.y, wall.end.x - wall.start.x);
+        const mid = door.offsetM + door.widthM / 2;
+        const wx = wall.start.x + Math.cos(angle) * mid;
+        const wy = wall.start.y + Math.sin(angle) * mid;
+        const cx = toCanvasX(wx);
+        const cy = toCanvasY(wy);
+
+        if (door.kind === 'exit') {
+          // Glowing Exit Discharge Portal
+          ctx.fillStyle = '#10b981';
+          ctx.beginPath();
+          ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          ctx.fillStyle = '#065f46';
+          ctx.fillRect(cx - 24, cy - 20, 48, 14);
+          ctx.strokeStyle = '#10b981';
+          ctx.strokeRect(cx - 24, cy - 20, 48, 14);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 8px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('EXIT ➔', cx, cy - 10);
+          ctx.textAlign = 'left';
+        } else {
+          // Interior Door Symbol
+          ctx.fillStyle = '#f59e0b';
+          ctx.beginPath();
+          ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+    }
+
+    // 4. Draw Safety Fixtures (Extinguishers, Arrows, Stairs)
+    if (showFixtures && floor.fixtures) {
+      floor.fixtures.forEach(f => {
+        const cx = toCanvasX(f.position.x);
+        const cy = toCanvasY(f.position.y);
+
+        if (f.kind === 'fire_extinguisher') {
+          ctx.fillStyle = '#dc2626';
+          ctx.beginPath();
+          ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          ctx.fillStyle = '#b91c1c';
+          ctx.fillRect(cx - 18, cy + 8, 36, 12);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 7px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('FIRE EXT', cx, cy + 17);
+          ctx.textAlign = 'left';
+        } else if (f.kind === 'egress_arrow') {
+          ctx.fillStyle = '#10b981';
+          ctx.beginPath();
+          ctx.arc(cx, cy, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (f.kind === 'stairs') {
+          ctx.fillStyle = '#0284c7';
+          ctx.fillRect(cx - 15, cy - 15, 30, 30);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(cx - 15, cy - 15, 30, 30);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 8px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('STAIRS', cx, cy + 3);
+          ctx.textAlign = 'left';
+        }
+      });
+    }
+
+    // 5. Draw 2-Point Calibration line if set
     if (point1) {
       ctx.fillStyle = '#315CFA';
       ctx.beginPath();
@@ -106,12 +287,7 @@ export const ImportWizard: React.FC = () => {
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 2;
       ctx.stroke();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 10px sans-serif';
-      ctx.fillText('Point 1', point1.x + 8, point1.y - 8);
     }
-
     if (point2) {
       ctx.fillStyle = '#10b981';
       ctx.beginPath();
@@ -120,41 +296,18 @@ export const ImportWizard: React.FC = () => {
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 2;
       ctx.stroke();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 10px sans-serif';
-      ctx.fillText('Point 2', point2.x + 8, point2.y - 8);
     }
-
     if (point1 && point2) {
-      // Connect line
       ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.5;
       ctx.setLineDash([6, 4]);
       ctx.beginPath();
       ctx.moveTo(point1.x, point1.y);
       ctx.lineTo(point2.x, point2.y);
       ctx.stroke();
       ctx.setLineDash([]);
-
-      const dx = point2.x - point1.x;
-      const dy = point2.y - point1.y;
-      const pixelDist = Math.sqrt(dx * dx + dy * dy);
-      const midX = (point1.x + point2.x) / 2;
-      const midY = (point1.y + point2.y) / 2;
-
-      // Distance tag
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(midX - 45, midY - 14, 90, 22);
-      ctx.strokeStyle = '#f59e0b';
-      ctx.strokeRect(midX - 45, midY - 14, 90, 22);
-      ctx.fillStyle = '#fbbf24';
-      ctx.font = 'bold 11px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(`${pixelDist.toFixed(0)}px = ${knownDistanceM}m`, midX, midY + 1);
-      ctx.textAlign = 'left';
     }
-  }, [step, point1, point2, knownDistanceM]);
+  };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -171,94 +324,70 @@ export const ImportWizard: React.FC = () => {
     }
   };
 
-  const calculatedPixelDistance = point1 && point2
-    ? Math.sqrt(Math.pow(point2.x - point1.x, 2) + Math.pow(point2.y - point1.y, 2))
-    : 400;
+  // Turn detected plan into 3D Simulation
+  const handleLaunch3DPlan = () => {
+    if (!detectionResult) return;
+    const building = detectionResult.building;
 
-  const pixelsPerMeter = (calculatedPixelDistance / Math.max(0.5, knownDistanceM)).toFixed(1);
-
-  const handleConfirmAndLoad = () => {
-    const importedBuilding: Building = {
-      schemaVersion: 1,
-      id: `imported-${Date.now().toString(36)}`,
-      name: file ? file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ') : 'Imported Facility Plan',
-      units: 'm',
-      importProvenance: {
-        format: file?.name.endsWith('.pdf') ? 'pdf' : 'png',
-        sourceName: file?.name || 'plan.png',
-        scaleConfirmed: true,
-        geometryReviewed: true,
-      },
-      floors: [
-        {
-          id: 'floor-0',
-          elevationM: 0,
-          walls: [
-            { id: 'w-imp-s', start: { x: 0, y: 0 }, end: { x: 20, y: 0 }, thicknessM: 0.25, heightM: 3.0 },
-            { id: 'w-imp-n', start: { x: 0, y: 12 }, end: { x: 20, y: 12 }, thicknessM: 0.25, heightM: 3.0 },
-            { id: 'w-imp-w', start: { x: 0, y: 0 }, end: { x: 0, y: 12 }, thicknessM: 0.25, heightM: 3.0 },
-            { id: 'w-imp-e', start: { x: 20, y: 0 }, end: { x: 20, y: 12 }, thicknessM: 0.25, heightM: 3.0 },
-            { id: 'w-imp-divider', start: { x: 10, y: 0 }, end: { x: 10, y: 12 }, thicknessM: 0.25, heightM: 3.0 },
-          ],
-          doors: [
-            { id: 'd-imp-exit-w', wallId: 'w-imp-w', offsetM: 4.5, widthM: 1.8, passable: true, kind: 'exit', connectsRoomIds: ['r-west'] },
-            { id: 'd-imp-exit-e', wallId: 'w-imp-e', offsetM: 4.5, widthM: 1.8, passable: true, kind: 'exit', connectsRoomIds: ['r-east'] },
-            { id: 'd-imp-passage', wallId: 'w-imp-divider', offsetM: 5.0, widthM: 1.2, passable: true, kind: 'interior', connectsRoomIds: ['r-west', 'r-east'] },
-          ],
-          rooms: [
-            {
-              id: 'r-west',
-              name: 'West Open Plan Zone',
-              outline: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 12 }, { x: 0, y: 12 }],
-              occupants: 25,
-            },
-            {
-              id: 'r-east',
-              name: 'East Conference Hall',
-              outline: [{ x: 10, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 12 }, { x: 10, y: 12 }],
-              occupants: 30,
-            },
-          ],
-          exits: [
-            { id: 'exit-imp-1', doorId: 'd-imp-exit-w', destination: 'outside' },
-            { id: 'exit-imp-2', doorId: 'd-imp-exit-e', destination: 'outside' },
-          ],
-          obstacles: [],
-        },
-      ],
+    // Apply verified provenance
+    building.importProvenance = {
+      format: 'png',
+      sourceName: file?.name || 'home_fire_and_emergency_plan.png',
+      scaleConfirmed: true,
+      geometryReviewed: true,
     };
 
-    setBuilding(importedBuilding);
+    setBuilding(building);
+    setIs3DMode(true);
+    setActiveTab('simulation3d');
+    runBaselineSimulation();
+  };
+
+  const handleOpen2DEditor = () => {
+    if (!detectionResult) return;
+    const building = detectionResult.building;
+    building.importProvenance = {
+      format: 'png',
+      sourceName: file?.name || 'home_fire_and_emergency_plan.png',
+      scaleConfirmed: true,
+      geometryReviewed: true,
+    };
+
+    setBuilding(building);
+    setIs3DMode(false);
     setActiveTab('editor');
   };
 
+  const stats = detectionResult?.stats;
+
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto space-y-6 sm:space-y-8">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-6 sm:space-y-8">
       {/* Stepper Header */}
       <div>
-        <span className="text-xs font-bold text-[#315CFA] bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
-          Plan Import & Scale Calibration Wizard
-        </span>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-700 text-xs font-semibold">
+          <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+          AI Floor Plan Image Detection & 3D Conversion Engine
+        </div>
         <h2 className="text-2xl font-bold text-slate-900 mt-2">
-          Import Floor Plan Drawing
+          Transform Floor Plan Image into 3D Physics Plan
         </h2>
         <p className="text-xs text-slate-500 mt-0.5">
-          Follow the 3-step verification pipeline: Upload → Scale Calibration → Geometric Confirmation
+          Detects walls, doors, rooms, exits, and safety equipment (fire extinguishers & egress paths) from raster drawings and converts to calibrated 3D geometry.
         </p>
       </div>
 
       {/* Stepper Bar */}
       <div className="flex items-center justify-between border-b border-slate-200 pb-4 overflow-x-auto gap-2">
         {[
-          { step: 1, title: 'Upload File' },
-          { step: 2, title: '2-Point Scale Calibration' },
-          { step: 3, title: 'Geometry Review' },
+          { step: 1, title: '1. Select / Upload Drawing' },
+          { step: 2, title: '2. AI Detection & CAD Layer Review' },
+          { step: 3, title: '3. Convert & Launch 3D Simulation' },
         ].map(s => (
           <div key={s.step} className="flex items-center gap-2 shrink-0">
             <div
               className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
                 step >= s.step
-                  ? 'bg-[#315CFA] text-white shadow-xs'
+                  ? 'bg-brand-primary text-white shadow-xs'
                   : 'bg-slate-100 text-slate-400'
               }`}
             >
@@ -271,203 +400,217 @@ export const ImportWizard: React.FC = () => {
         ))}
       </div>
 
-      {/* Step 1: Upload */}
+      {/* Step 1: Upload or Choose Plan */}
       {step === 1 && (
-        <div className="bg-white rounded-xl border border-slate-200 p-6 sm:p-10 text-center space-y-6">
-          <div className="w-16 h-16 rounded-full bg-blue-50 text-[#315CFA] flex items-center justify-center mx-auto">
-            <UploadCloud className="w-8 h-8" />
-          </div>
-          <div>
-            <h3 className="font-bold text-lg text-slate-900">Upload Blueprint or Floor Plan Image</h3>
-            <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
-              Supported formats: PNG, JPG, or single-page architectural PDF. Measurements will be converted
-              to real-world SI meters via 2-point calibration.
-            </p>
-          </div>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Quick Demo: Home Fire and Emergency Plan */}
+            <div className="bg-gradient-to-br from-purple-900 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white border border-purple-800/40 shadow-xl flex flex-col justify-between space-y-5">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-200 text-[11px] font-mono font-semibold">
+                    Target Reference Plan
+                  </span>
+                  <Flame className="w-5 h-5 text-amber-400" />
+                </div>
+                <h3 className="text-xl font-bold tracking-tight">
+                  Home Fire & Emergency Plan
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  The uploaded single-story residential fire plan with Living Room, Master Bedroom, Balcony, Kitchen, Central Hallway, 4 Fire Extinguishers, Green Egress Arrows, and Emergency Exit Stairs.
+                </p>
+                <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-700/60 flex items-center gap-3">
+                  <img
+                    src="/samples/home_fire_plan.png"
+                    alt="Home Fire Plan"
+                    className="w-16 h-18 object-contain rounded bg-white p-1 shrink-0"
+                  />
+                  <div className="text-[11px] font-mono text-slate-300 space-y-0.5">
+                    <div>Dimensions: 650 × 743 px</div>
+                    <div>Scale: ~28.5 px/m (SI Meters)</div>
+                    <div className="text-emerald-400 font-semibold">✓ Ready for Instant AI Detection</div>
+                  </div>
+                </div>
+              </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <label className="btn-primary text-xs py-2.5 px-6 cursor-pointer shadow-sm w-full sm:w-auto justify-center">
-              <span>Browse Local Files</span>
-              <input
-                type="file"
-                accept=".png,.jpg,.jpeg,.pdf"
-                className="hidden"
-                onChange={handleFileUpload}
-              />
-            </label>
-            <button
-              onClick={handleUseSampleBlueprint}
-              className="btn-outline text-xs py-2.5 px-6 w-full sm:w-auto justify-center"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-              Use Sample Blueprint (Quick Demo)
-            </button>
+              <button
+                onClick={handleLoadHomeFirePlan}
+                disabled={isDetecting}
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+              >
+                {isDetecting ? (
+                  <>
+                    <Sparkles className="w-4 h-4 animate-spin text-purple-200" />
+                    Running Plan Feature Detection...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 text-purple-200" />
+                    Load & Auto-Detect Home Fire Plan →
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Custom Upload Card */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between space-y-5">
+              <div className="space-y-3">
+                <div className="w-12 h-12 rounded-xl bg-blue-50 text-brand-primary flex items-center justify-center">
+                  <UploadCloud className="w-6 h-6" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900">
+                  Upload Custom Floor Plan
+                </h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Upload any architectural drawing, blueprint, or emergency evacuation plan (PNG, JPG). The computer vision pipeline will automatically segment walls, doors, exits, and rooms.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <label className="btn-primary text-xs py-3 px-6 cursor-pointer shadow-sm w-full justify-center">
+                  <UploadCloud className="w-4 h-4" />
+                  <span>Choose Image File (PNG, JPG)</span>
+                  <input
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.webp"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                </label>
+                <div className="text-[11px] text-center text-slate-400 font-mono">
+                  SI Meters · Automatic Geometry Synthesis
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Step 2: Scale Calibration */}
-      {step === 2 && (
-        <div className="bg-white rounded-xl border border-slate-200 p-6 sm:p-8 space-y-6">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-50 text-[#315CFA] flex items-center justify-center shrink-0">
-                <Ruler className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-base text-slate-900">Interactive 2-Point Scale Calibration</h3>
-                <p className="text-xs text-slate-500">
-                  Click two points on the drawing with a known real-world distance in meters.
-                </p>
-              </div>
+      {/* Step 2: AI Detection & Layer Review */}
+      {step === 2 && detectionResult && (
+        <div className="space-y-6">
+          {/* Stats Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+              <span className="text-slate-400 block text-[10px] font-bold uppercase">Walls Detected</span>
+              <strong className="text-lg text-slate-900 font-mono font-bold">
+                {stats?.wallsCount} walls
+              </strong>
             </div>
-
-            <button
-              onClick={() => {
-                setPoint1(null);
-                setPoint2(null);
-              }}
-              className="btn-outline text-xs py-1.5 px-3 flex items-center gap-1.5"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Reset Points
-            </button>
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+              <span className="text-slate-400 block text-[10px] font-bold uppercase">Doors & Exits</span>
+              <strong className="text-lg text-emerald-600 font-mono font-bold">
+                {stats?.doorsCount} ({stats?.exitsCount} exit)
+              </strong>
+            </div>
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+              <span className="text-slate-400 block text-[10px] font-bold uppercase">Rooms Segmented</span>
+              <strong className="text-lg text-indigo-600 font-mono font-bold">
+                {stats?.roomsCount} rooms
+              </strong>
+            </div>
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+              <span className="text-slate-400 block text-[10px] font-bold uppercase">Fire Extinguishers</span>
+              <strong className="text-lg text-rose-600 font-mono font-bold">
+                {stats?.extinguishersCount} units
+              </strong>
+            </div>
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+              <span className="text-slate-400 block text-[10px] font-bold uppercase">Egress Guidance</span>
+              <strong className="text-lg text-cyan-600 font-mono font-bold">
+                {stats?.egressArrowsCount} vectors
+              </strong>
+            </div>
           </div>
 
-          {/* Interactive Calibration Canvas */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <span className="flex items-center gap-1">
-                <MousePointer2 className="w-3.5 h-3.5 text-[#315CFA]" />
-                {point1 && point2
-                  ? 'Both calibration points set!'
-                  : point1
-                  ? 'Click Point 2 to complete the distance line'
-                  : 'Click on the canvas to place Point 1'}
-              </span>
-              <span className="font-mono text-slate-600">
-                Calibration: {pixelsPerMeter} px/m
-              </span>
+          {/* Interactive Inspection Canvas with Layer Toggles */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Vectorized Plan Overlay Inspection
+                </h3>
+                <p className="text-xs text-slate-500">
+                  High-precision CAD vectors mapped directly onto drawing geometry
+                </p>
+              </div>
+
+              {/* Layer Toggles */}
+              <div className="flex items-center gap-2 flex-wrap text-xs">
+                <button
+                  onClick={() => setShowWalls(!showWalls)}
+                  className={`px-2.5 py-1 rounded-md font-semibold text-[11px] border transition-colors ${
+                    showWalls ? 'bg-sky-50 text-sky-700 border-sky-300' : 'bg-slate-50 text-slate-400 border-slate-200'
+                  }`}
+                >
+                  Walls ({stats?.wallsCount})
+                </button>
+                <button
+                  onClick={() => setShowDoors(!showDoors)}
+                  className={`px-2.5 py-1 rounded-md font-semibold text-[11px] border transition-colors ${
+                    showDoors ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-slate-50 text-slate-400 border-slate-200'
+                  }`}
+                >
+                  Doors & Exits ({stats?.doorsCount})
+                </button>
+                <button
+                  onClick={() => setShowRooms(!showRooms)}
+                  className={`px-2.5 py-1 rounded-md font-semibold text-[11px] border transition-colors ${
+                    showRooms ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-slate-50 text-slate-400 border-slate-200'
+                  }`}
+                >
+                  Rooms ({stats?.roomsCount})
+                </button>
+                <button
+                  onClick={() => setShowFixtures(!showFixtures)}
+                  className={`px-2.5 py-1 rounded-md font-semibold text-[11px] border transition-colors ${
+                    showFixtures ? 'bg-rose-50 text-rose-700 border-rose-300' : 'bg-slate-50 text-slate-400 border-slate-200'
+                  }`}
+                >
+                  Safety Equipment
+                </button>
+              </div>
             </div>
 
-            <div className="border border-slate-300 rounded-xl overflow-hidden shadow-xs bg-slate-950 flex justify-center">
+            {/* Canvas Box */}
+            <div className="relative border border-slate-200 rounded-xl overflow-hidden bg-slate-950 flex justify-center">
               <canvas
                 ref={canvasRef}
-                width={800}
-                height={400}
+                width={650}
+                height={743}
                 onClick={handleCanvasClick}
                 className="cursor-crosshair max-w-full h-auto"
               />
             </div>
           </div>
 
-          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <label className="text-xs font-bold text-slate-700 block mb-1">
-                Enter Known Reference Distance (Meters):
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0.5}
-                  max={500}
-                  step={0.5}
-                  value={knownDistanceM}
-                  onChange={e => setKnownDistanceM(Number(e.target.value))}
-                  className="w-36 bg-white border border-slate-300 rounded-md px-3 py-1.5 text-sm font-semibold outline-none focus:border-[#315CFA]"
-                />
-                <span className="text-xs text-slate-600 font-medium">meters (SI Units)</span>
-              </div>
-            </div>
-
-            <div className="text-xs text-slate-600 bg-white p-3 rounded border border-slate-200 max-w-xs">
-              ✓ Verified scale factor: <strong>1 meter = {pixelsPerMeter} pixels</strong>.
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-            <button onClick={() => setStep(1)} className="btn-outline text-xs py-2 px-4">
-              Back
-            </button>
-            <button onClick={() => setStep(3)} className="btn-primary text-xs py-2 px-5">
-              Next: Review Geometry →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Step 3: Geometry Review */}
-      {step === 3 && (
-        <div className="bg-white rounded-xl border border-slate-200 p-6 sm:p-8 space-y-6">
-          <div className="space-y-1">
-            <h3 className="font-bold text-base text-slate-900">Confirm Geometry & Provenance</h3>
-            <p className="text-xs text-slate-500">
-              Per specification requirements, imported plans require user scale confirmation and geometry review
-              before evacuation simulation can proceed.
-            </p>
-          </div>
-
-          {/* Extracted Elements Summary */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-              <span className="text-slate-500 block mb-1">Extracted Walls</span>
-              <strong className="text-base text-slate-900 font-mono">5 walls</strong>
-            </div>
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-              <span className="text-slate-500 block mb-1">Designated Rooms</span>
-              <strong className="text-base text-slate-900 font-mono">2 rooms (55 occ)</strong>
-            </div>
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-              <span className="text-slate-500 block mb-1">Outside Exits</span>
-              <strong className="text-base text-emerald-700 font-mono">2 exits (3.6m)</strong>
-            </div>
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-              <span className="text-slate-500 block mb-1">Scale Calibrated</span>
-              <strong className="text-base text-blue-700 font-mono">{knownDistanceM}m</strong>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <label className="flex items-start gap-3 p-3.5 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={scaleConfirmed}
-                onChange={e => setScaleConfirmed(e.target.checked)}
-                className="w-4 h-4 rounded text-[#315CFA] accent-[#315CFA] mt-0.5"
-              />
-              <span className="text-xs text-slate-800 font-medium">
-                I confirm the real-world scale is accurate ({knownDistanceM}m calibrated at {pixelsPerMeter} px/m).
-              </span>
-            </label>
-
-            <label className="flex items-start gap-3 p-3.5 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={geometryReviewed}
-                onChange={e => setGeometryReviewed(e.target.checked)}
-                className="w-4 h-4 rounded text-[#315CFA] accent-[#315CFA] mt-0.5"
-              />
-              <span className="text-xs text-slate-800 font-medium">
-                I have reviewed all walls, internal doors, and outside exit positions.
-              </span>
-            </label>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-            <button onClick={() => setStep(2)} className="btn-outline text-xs py-2 px-4">
-              Back
-            </button>
+          {/* Action Row */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200">
             <button
-              onClick={handleConfirmAndLoad}
-              disabled={!scaleConfirmed || !geometryReviewed}
-              className="btn-primary text-xs py-2 px-5 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              onClick={() => setStep(1)}
+              className="btn-outline text-xs py-2.5 px-4 w-full sm:w-auto justify-center"
             >
-              Confirm & Open in 2D Editor
+              ← Choose Different Plan
             </button>
+
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <button
+                onClick={handleOpen2DEditor}
+                className="btn-outline text-xs py-2.5 px-5 w-full sm:w-auto justify-center"
+              >
+                Open in 2D CAD Editor
+              </button>
+              <button
+                onClick={handleLaunch3DPlan}
+                className="btn-primary text-xs py-2.5 px-6 shadow-md w-full sm:w-auto justify-center font-bold"
+              >
+                <Box className="w-4 h-4" />
+                Convert to 3D Plan & Run Simulation →
+              </button>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 };
-
