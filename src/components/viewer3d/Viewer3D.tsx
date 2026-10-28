@@ -43,7 +43,7 @@ const Building3DModel: React.FC<{
           <mesh
             key={`wall-${wIdx}`}
             position={[wall.start.x + dx / 2, wall.heightM / 2, -(wall.start.y + dy / 2)]}
-            rotation={[0, -angle, 0]}
+            rotation={[0, angle, 0]}
             castShadow
             receiveShadow
           >
@@ -67,7 +67,7 @@ const Building3DModel: React.FC<{
               <mesh
                 key={`wall-${wIdx}-seg-${dIdx}`}
                 position={[midX, wall.heightM / 2, -midY]}
-                rotation={[0, -angle, 0]}
+                rotation={[0, angle, 0]}
                 castShadow
                 receiveShadow
               >
@@ -88,7 +88,7 @@ const Building3DModel: React.FC<{
             <mesh
               key={`wall-${wIdx}-lintel-${dIdx}`}
               position={[doorMidX, doorHeight + lintelHeight / 2, -doorMidY]}
-              rotation={[0, -angle, 0]}
+              rotation={[0, angle, 0]}
               castShadow
             >
               <boxGeometry args={[door.widthM, lintelHeight, wall.thicknessM]} />
@@ -103,7 +103,7 @@ const Building3DModel: React.FC<{
               <mesh
                 key={`door-blockage-${door.id}`}
                 position={[doorMidX, doorHeight / 2, -doorMidY]}
-                rotation={[0, -angle, 0]}
+                rotation={[0, angle, 0]}
               >
                 <boxGeometry args={[door.widthM * 0.95, doorHeight * 0.95, wall.thicknessM * 0.8]} />
                 <meshStandardMaterial color="#ef4444" roughness={0.3} metalness={0.2} transparent opacity={0.85} />
@@ -125,7 +125,7 @@ const Building3DModel: React.FC<{
             <mesh
               key={`wall-${wIdx}-end`}
               position={[midX, wall.heightM / 2, -midY]}
-              rotation={[0, -angle, 0]}
+              rotation={[0, angle, 0]}
               castShadow
               receiveShadow
             >

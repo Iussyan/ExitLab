@@ -151,5 +151,47 @@ describe('Comprehensive Component & Flow Audit', () => {
     expect(run.gridBounds.cellSizeM).toBe(0.25);
     expect(run.metrics.bottleneckCells).toBeDefined();
   });
+
+  it('guarantees agents never pass through solid walls outside of door openings', () => {
+    const b = simpleSchool as unknown as Building;
+    const run = runSimulation(b, {
+      id: 'wall-pass-test',
+      name: 'Wall Pass Test',
+      seed: 42,
+      blockedDoorIds: [],
+    });
+
+    // Valid door intervals on corridor south wall (w-corr-s at y = 5.0):
+    // d-room-101: offset 2.5, width 1.0 -> [2.5, 3.5]
+    // d-room-102: offset 10.5, width 1.0 -> [10.5, 11.5]
+    // d-room-103: offset 18.5, width 1.0 -> [18.5, 19.5]
+    const validDoorXOnCorrS = [
+      { min: 2.2, max: 3.8 },
+      { min: 10.2, max: 11.8 },
+      { min: 18.2, max: 19.8 },
+    ];
+
+    for (let f = 1; f < run.frames.length; f++) {
+      const prevFrame = run.frames[f - 1];
+      const currFrame = run.frames[f];
+
+      for (const currAg of currFrame.agents) {
+        const prevAg = prevFrame.agents.find(a => a.id === currAg.id);
+        if (!prevAg) continue;
+
+        const crossedCorrS = (prevAg.y < 5.0 && currAg.y >= 5.0) || (prevAg.y >= 5.0 && currAg.y < 5.0);
+        if (crossedCorrS) {
+          const isAtDoor = validDoorXOnCorrS.some(d => currAg.x >= d.min && currAg.x <= d.max);
+          expect(isAtDoor, `Agent ${currAg.id} crossed wall at x=${currAg.x}, y=${currAg.y} outside of any door!`).toBe(true);
+        }
+      }
+    }
+  });
 });
+
+
+
+
+
+
 

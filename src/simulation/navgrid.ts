@@ -192,7 +192,7 @@ export function buildNavGrid(building: Building, cellSizeM: number = 0.25, block
 
   // 4. Apply Walls
   for (const wall of floor.walls) {
-    const halfThick = Math.max(wall.thicknessM / 2, cellSizeM * 0.45);
+    const halfThick = wall.thicknessM / 2 + cellSizeM * 0.35;
 
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
@@ -201,7 +201,7 @@ export function buildNavGrid(building: Building, cellSizeM: number = 0.25, block
         const { dist, offsetAlongSegment, segLength } = pointToSegment(pt, wall.start, wall.end);
 
         // Check if cell is within the wall solid body
-        if (dist <= halfThick && offsetAlongSegment >= -cellSizeM * 0.25 && offsetAlongSegment <= segLength + cellSizeM * 0.25) {
+        if (dist <= halfThick && offsetAlongSegment >= -cellSizeM * 0.35 && offsetAlongSegment <= segLength + cellSizeM * 0.35) {
           cell.walkable = false;
         }
       }
@@ -217,9 +217,9 @@ export function buildNavGrid(building: Building, cellSizeM: number = 0.25, block
     if (isBlocked) continue; // blocked doors remain impassable solid walls
 
     const wallThickness = wall.thicknessM;
-    const doorHalfDepth = Math.max(wallThickness / 2 + cellSizeM * 0.75, 0.4);
-    const doorStart = door.offsetM - cellSizeM * 0.2;
-    const doorEnd = door.offsetM + door.widthM + cellSizeM * 0.2;
+    const doorHalfDepth = Math.max(wallThickness / 2 + cellSizeM * 0.85, 0.45);
+    const doorStart = door.offsetM - cellSizeM * 0.15;
+    const doorEnd = door.offsetM + door.widthM + cellSizeM * 0.15;
 
     const exit = exitDoorMap.get(door.id);
 
