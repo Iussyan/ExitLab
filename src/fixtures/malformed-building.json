@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "malformed-fixture",
+  "name": "Invalid Architectural Draft With Critical Errors",
+  "units": "m",
+  "importProvenance": {
+    "format": "json",
+    "sourceName": "corrupted-cad.json",
+    "scaleConfirmed": false,
+    "geometryReviewed": false
+  },
+  "floors": [
+    {
+      "id": "floor-0",
+      "elevationM": 0,
+      "walls": [
+        { "id": "w-valid", "start": { "x": 0, "y": 0 }, "end": { "x": 10, "y": 0 }, "thicknessM": 0.2, "heightM": 3.0 },
+        { "id": "w-degenerate", "start": { "x": 5, "y": 5 }, "end": { "x": 5, "y": 5 }, "thicknessM": 0.2, "heightM": 3.0 },
+        { "id": "w-valid", "start": { "x": 0, "y": 0 }, "end": { "x": 0, "y": 10 }, "thicknessM": 0.2, "heightM": 3.0 }
+      ],
+      "doors": [
+        { "id": "d-floating", "wallId": "w-non-existent-wall", "offsetM": 1.0, "widthM": 1.0, "passable": true, "kind": "interior" },
+        { "id": "d-overflow", "wallId": "w-valid", "offsetM": 9.5, "widthM": 2.0, "passable": true, "kind": "exit" }
+      ],
+      "rooms": [
+        {
+          "id": "r-broken-polygon",
+          "name": "Degenerate Room",
+          "outline": [{ "x": 0, "y": 0 }, { "x": 1, "y": 1 }],
+          "occupants": -5
+        }
+      ],
+      "exits": [
+        { "id": "exit-ghost", "doorId": "d-ghost-door", "destination": "outside" }
+      ],
+      "obstacles": []
+    }
+  ]
+}

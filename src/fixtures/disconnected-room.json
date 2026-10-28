@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "disconnected-room-fixture",
+  "name": "Isolated Archive Facility (Disconnected Room Test)",
+  "units": "m",
+  "importProvenance": {
+    "format": "json",
+    "sourceName": "isolated-test.json",
+    "scaleConfirmed": true,
+    "geometryReviewed": true
+  },
+  "floors": [
+    {
+      "id": "floor-0",
+      "elevationM": 0,
+      "walls": [
+        { "id": "w-outer-s", "start": { "x": 0, "y": 0 }, "end": { "x": 16, "y": 0 }, "thicknessM": 0.2, "heightM": 3.0 },
+        { "id": "w-outer-n", "start": { "x": 0, "y": 8 }, "end": { "x": 16, "y": 8 }, "thicknessM": 0.2, "heightM": 3.0 },
+        { "id": "w-outer-w", "start": { "x": 0, "y": 0 }, "end": { "x": 0, "y": 8 }, "thicknessM": 0.2, "heightM": 3.0 },
+        { "id": "w-outer-e", "start": { "x": 16, "y": 0 }, "end": { "x": 16, "y": 8 }, "thicknessM": 0.2, "heightM": 3.0 },
+        { "id": "w-middle-divider", "start": { "x": 8, "y": 0 }, "end": { "x": 8, "y": 8 }, "thicknessM": 0.3, "heightM": 3.0 }
+      ],
+      "doors": [
+        { "id": "d-exit-main", "wallId": "w-outer-w", "offsetM": 3.0, "widthM": 1.5, "passable": true, "kind": "exit", "connectsRoomIds": ["r-accessible"] }
+      ],
+      "rooms": [
+        {
+          "id": "r-accessible",
+          "name": "Accessible Office",
+          "outline": [{ "x": 0.0, "y": 0.0 }, { "x": 8.0, "y": 0.0 }, { "x": 8.0, "y": 8.0 }, { "x": 0.0, "y": 8.0 }],
+          "occupants": 5
+        },
+        {
+          "id": "r-sealed-archive",
+          "name": "Sealed Storage Room (No Doors)",
+          "outline": [{ "x": 8.0, "y": 0.0 }, { "x": 16.0, "y": 0.0 }, { "x": 16.0, "y": 8.0 }, { "x": 8.0, "y": 8.0 }],
+          "occupants": 4
+        }
+      ],
+      "exits": [
+        { "id": "exit-01", "doorId": "d-exit-main", "destination": "outside" }
+      ],
+      "obstacles": []
+    }
+  ]
+}

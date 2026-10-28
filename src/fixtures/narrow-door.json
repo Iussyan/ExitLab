@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "id": "narrow-door-fixture",
+  "name": "High-Density Hall with Chokepoint Passage",
+  "units": "m",
+  "importProvenance": {
+    "format": "json",
+    "sourceName": "narrow-corridor.json",
+    "scaleConfirmed": true,
+    "geometryReviewed": true
+  },
+  "floors": [
+    {
+      "id": "floor-0",
+      "elevationM": 0,
+      "walls": [
+        { "id": "w-outer-s", "start": { "x": 0, "y": 0 }, "end": { "x": 20, "y": 0 }, "thicknessM": 0.2, "heightM": 3.0 },
+        { "id": "w-outer-n", "start": { "x": 0, "y": 6 }, "end": { "x": 20, "y": 6 }, "thicknessM": 0.2, "heightM": 3.0 },
+        { "id": "w-outer-w", "start": { "x": 0, "y": 0 }, "end": { "x": 0, "y": 6 }, "thicknessM": 0.2, "heightM": 3.0 },
+        { "id": "w-outer-e", "start": { "x": 20, "y": 0 }, "end": { "x": 20, "y": 6 }, "thicknessM": 0.2, "heightM": 3.0 },
+        { "id": "w-chokepoint-wall", "start": { "x": 10, "y": 0 }, "end": { "x": 10, "y": 6 }, "thicknessM": 0.3, "heightM": 3.0 }
+      ],
+      "doors": [
+        { "id": "d-narrow-bottleneck", "wallId": "w-chokepoint-wall", "offsetM": 2.6, "widthM": 0.8, "passable": true, "kind": "interior", "connectsRoomIds": ["r-assembly", "r-exit-vestibule"] },
+        { "id": "d-final-exit", "wallId": "w-outer-e", "offsetM": 2.0, "widthM": 2.0, "passable": true, "kind": "exit", "connectsRoomIds": ["r-exit-vestibule"] }
+      ],
+      "rooms": [
+        {
+          "id": "r-assembly",
+          "name": "Crowded Assembly Area",
+          "outline": [{ "x": 0.0, "y": 0.0 }, { "x": 10.0, "y": 0.0 }, { "x": 10.0, "y": 6.0 }, { "x": 0.0, "y": 6.0 }],
+          "occupants": 30
+        },
+        {
+          "id": "r-exit-vestibule",
+          "name": "Discharge Vestibule",
+          "outline": [{ "x": 10.0, "y": 0.0 }, { "x": 20.0, "y": 0.0 }, { "x": 20.0, "y": 6.0 }, { "x": 10.0, "y": 6.0 }],
+          "occupants": 2
+        }
+      ],
+      "exits": [
+        { "id": "exit-final", "doorId": "d-final-exit", "destination": "outside" }
+      ],
+      "obstacles": []
+    }
+  ]
+}
