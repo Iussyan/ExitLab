@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   --brand-primary: #315CFA;
   --brand-primary-hover: #2347d9;
@@ -23,8 +27,6 @@
 
 * {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
 }
 
 body {
@@ -72,25 +74,7 @@ code, pre, .font-mono {
   animation: pulseGlow 2.5s infinite ease-in-out;
 }
 
-@keyframes scanline {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(1000%); }
-}
-
-.scanline-effect {
-  position: relative;
-  overflow: hidden;
-}
-
-.scanline-effect::after {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(49, 92, 250, 0.6), transparent);
-  animation: scanline 4s linear infinite;
-}
-
-/* Badge and Button Utilities */
+/* Button & Card Utilities */
 .btn-primary {
   background-color: var(--brand-primary);
   color: #ffffff;
