@@ -21,6 +21,10 @@
 | [canvas-design](file:///d:/Users/QCU/Documents/ExitLab/.agents/skills/canvas-design/SKILL.md) | `anthropics/skills` (via `skills.sh`) | HTML5 Canvas 2D rendering, spatial overlays, typography | Active |
 | [lightweight-3d-effects](file:///d:/Users/QCU/Documents/ExitLab/.agents/skills/lightweight-3d-effects/SKILL.md) | `freshtechbro/claudedesignskills` (via `skills.sh`) | Micro-interactions, subtle depth, tilt effects | Active |
 | [3d-visualizer](file:///d:/Users/QCU/Documents/ExitLab/.agents/skills/3d-visualizer/SKILL.md) | `daffy0208/ai-dev-standards` (via `skills.sh`) | 3D graphics and interactive visualizations | Active |
+| [code-review](file:///d:/Users/QCU/Documents/ExitLab/.agents/skills/code-review/SKILL.md) | `mattpocock/skills` (via `skills.sh`) | Two-axis spec & standards code review; Fowler code smell detection | Active |
+| [diagnosing-bugs](file:///d:/Users/QCU/Documents/ExitLab/.agents/skills/diagnosing-bugs/SKILL.md) | `mattpocock/skills` (via `skills.sh`) | Tight feedback loop construction, bug isolation, regression bisection | Active |
+| [systematic-debugging](file:///d:/Users/QCU/Documents/ExitLab/.agents/skills/systematic-debugging/SKILL.md) | `obra/superpowers` (via `skills.sh`) | Root-cause-first investigation, hypothesis verification, invariant defense | Active |
+| [webapp-testing](file:///d:/Users/QCU/Documents/ExitLab/.agents/skills/webapp-testing/SKILL.md) | `anthropics/skills` (via `skills.sh`) | Playwright browser automation, DOM and network assertion, UI audits | Active |
 
 ## Feature Matrix
 | Feature | Status | Evidence (paths/tests) | Blockers / Next Action |
