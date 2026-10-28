@@ -5,7 +5,7 @@
 ## Repo Snapshot
 - **Inspection Date:** 2026-10-29
 - **Environment:** Windows, Node v24.21.0, npm 11.19.0 (invoked via `npm.cmd`), Git 2.56.0
-- **Git Status:** All milestones committed; 21/21 automated tests passing
+- **Git Status:** All milestones committed; 25/25 automated tests passing
 - **Meta API Status:** Server-side proxy implemented in `server/index.ts`. Baseline, autonomous heuristic, and server-side Llama models functional with 100% offline fallback.
 - **Working Demo URL:** `http://localhost:5173/` (Vite dev server running) and `http://localhost:3001` (Express API server running)
 
@@ -34,7 +34,7 @@
 | Routing and navigation grid | Verified | [navgrid.ts](file:///d:/Users/QCU/Documents/ExitLab/src/simulation/navgrid.ts), [pathfinding.ts](file:///d:/Users/QCU/Documents/ExitLab/src/simulation/pathfinding.ts) | 0.25m grid discretization with wall cutouts, door transit zone, and multi-source Dijkstra |
 | Wall Penetration & Euler Alignment | Verified | [navgrid.ts](file:///d:/Users/QCU/Documents/ExitLab/src/simulation/navgrid.ts), [Viewer3D.tsx](file:///d:/Users/QCU/Documents/ExitLab/src/components/viewer3d/Viewer3D.tsx), [audit.test.ts](file:///d:/Users/QCU/Documents/ExitLab/tests/audit.test.ts) | Fixed rasterization collision half-thickness and inverted Euler angles; 100% door transit invariant verified |
 | Deterministic simulation engine | Verified | [engine.ts](file:///d:/Users/QCU/Documents/ExitLab/src/simulation/engine.ts), [prng.ts](file:///d:/Users/QCU/Documents/ExitLab/src/simulation/prng.ts) | Seeded PRNG, fixed dt=0.25s, door capacity (1.3 pers/m/s), queueing, and exact metrics |
-| Deterministic automated tests | Verified | [simulation.test.ts](file:///d:/Users/QCU/Documents/ExitLab/tests/simulation.test.ts), [audit.test.ts](file:///d:/Users/QCU/Documents/ExitLab/tests/audit.test.ts) (21 passed) | A01, A02, A03, A04, A05, A07, A08, A09 all passing in Vitest |
+| Invariant Defense & Hard Bug Tests | Verified | [audit.test.ts](file:///d:/Users/QCU/Documents/ExitLab/tests/audit.test.ts) (25 passed) | Diagonal corner cutting, door flow throttle (1.3 pers/m/s), rerouting, multiplier fuzzing |
 | Meta tool-using agent | Verified | [tools.ts](file:///d:/Users/QCU/Documents/ExitLab/src/agent/tools.ts), [orchestrator.ts](file:///d:/Users/QCU/Documents/ExitLab/src/agent/orchestrator.ts) | Guarded tool calls, strict schema arguments, verified run ID provenance, safety caveats |
 | AI-vs-random evaluation | Verified | [benchmark.ts](file:///d:/Users/QCU/Documents/ExitLab/src/agent/benchmark.ts), [BenchmarkView.tsx](file:///d:/Users/QCU/Documents/ExitLab/src/components/benchmark/BenchmarkView.tsx) | Equal-budget scenario benchmark with 3D worst-case replay and control comparison |
 | Responsive App Shell & Drawer | Verified | [Sidebar.tsx](file:///d:/Users/QCU/Documents/ExitLab/src/components/layout/Sidebar.tsx), [Header.tsx](file:///d:/Users/QCU/Documents/ExitLab/src/components/layout/Header.tsx) | Slide-in drawer with backdrop overlay, mobile hamburger toggle, responsive action pills |
@@ -51,8 +51,8 @@
 |---|---|---|---|
 | `git status` | 2026-10-29 | Passed | Tracked and verified |
 | `npm.cmd install` | 2026-10-29 | Passed (exit code 0) | Installed all core and dev dependencies |
-| `npm.cmd test -- --run` | 2026-10-29 | Passed (21 of 21 tests) | Vitest test suite executing in ~2.5s |
-| `npm.cmd run build` | 2026-10-29 | Passed (exit code 0) | `tsc && vite build` bundled in 12.08s |
+| `npm.cmd test -- --run` | 2026-10-29 | Passed (25 of 25 tests) | Vitest test suite executing in ~5.4s |
+| `npm.cmd run build` | 2026-10-29 | Passed (exit code 0) | `tsc && vite build` bundled in 19.18s |
 | `curl.exe http://localhost:5173/` | 2026-10-29 | HTTP 200 OK | Vite dev server active and serving frontend |
 | `curl.exe http://localhost:3001/api/health` | 2026-10-29 | HTTP 200 OK | Backend API server active |
 
@@ -64,5 +64,10 @@
 - 2026-10-29: Installed project-specific workspace skills in `.agents/skills/`: `exitlab-simulation`, `exitlab-meta-agent`, and `exitlab-geometry-pipeline`.
 - 2026-10-29: Button operability & responsive layout audit: fixed mobile navigation drawer, 2D canvas hit-testing for doors and rooms, run selector dropdown, congestion heatmap canvas, 2-point scale calibration, and data export.
 - 2026-10-29: Fixed wall penetration defect in `navgrid.ts` where cell centers at ±0.125m bypassed thin wall collisions; aligned Three.js Euler rotations in `Viewer3D.tsx`; added wall crossing invariant test in `tests/audit.test.ts`.
-- 2026-10-29: Installed verified community skills via `skills.sh` registry: `react-three-fiber`, `threejs-webgl`, `canvas-design`, `modern-web-design`, `lightweight-3d-effects`, and `3d-visualizer`. Verified `skills-lock.json` and 21/21 passing tests.
+- 2026-10-29: Installed verified community skills via `skills.sh` registry: `react-three-fiber`, `threejs-webgl`, `canvas-design`, `modern-web-design`, `lightweight-3d-effects`, `3d-visualizer`, `code-review`, `diagnosing-bugs`, `systematic-debugging`, and `webapp-testing`.
+- 2026-10-29: Executed Phase 1 & 2 of Audit & Quality Plan:
+  - Discovered and fixed door passage multi-counting bug where sub-cell stepping inside door bounds inflated passage counts.
+  - Excluded doorway boundary cells from initial occupant room spawn points.
+  - Added 4 automated invariant defense tests: diagonal wall corner cutting prevention, door transit flow rate boundary ($1.3\,\text{pers/m/s}$), dynamic secondary exit rerouting, and extreme density multiplier occupant conservation fuzzing across 16 combinations (25/25 tests passing).
+  - Strongly typed SI unit and coordinate aliases (`Meters`, `Seconds`, `WorldPoint`, `GridCoord`) added to eliminate Primitive Obsession.
 

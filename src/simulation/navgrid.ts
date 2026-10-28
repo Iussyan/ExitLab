@@ -258,8 +258,17 @@ export function buildNavGrid(building: Building, cellSizeM: number = 0.25, block
         walkableCells.push(cell);
         if (cell.roomId) {
           const rList = roomCellsMap.get(cell.roomId);
-          if (rList) rList.push(cell);
+          if (rList && !cell.isDoor) rList.push(cell);
         }
+      }
+    }
+  }
+
+  // Fallback: if a tiny room has only door cells, include them so occupants can spawn
+  for (const [roomId, list] of roomCellsMap.entries()) {
+    if (list.length === 0) {
+      for (const cell of walkableCells) {
+        if (cell.roomId === roomId) list.push(cell);
       }
     }
   }

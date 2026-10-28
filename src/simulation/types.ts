@@ -1,5 +1,23 @@
 import { Point2 } from '../schemas/building';
 
+/** Strongly typed SI units to prevent Primitive Obsession */
+export type Meters = number;
+export type Seconds = number;
+export type MetersPerSecond = number;
+export type PersonsPerMeterSecond = number;
+
+/** Unified 2D world coordinates in SI meters */
+export interface WorldPoint {
+  x: Meters;
+  y: Meters;
+}
+
+/** Unified discrete grid coordinates */
+export interface GridCoord {
+  col: number;
+  row: number;
+}
+
 export interface Scenario {
   id: string;
   name: string;
@@ -7,7 +25,7 @@ export interface Scenario {
   blockedDoorIds: string[];
   blockedObstacleIds?: string[];
   occupancyMultiplier?: number; // bounded e.g. [0.5, 2.0]
-  startDelaySeconds?: number;
+  startDelaySeconds?: Seconds;
 }
 
 export interface SimulationConfig {

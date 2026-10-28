@@ -287,10 +287,11 @@ export function runSimulation(
       }
 
       if (bestCell) {
-        // If entering a door from outside the door, consume 1.0 throughput token
+        // If entering a door from outside the door, consume 1.0 throughput token and count passage
         if (bestCell.isDoor && bestCell.doorId && !currCell.isDoor) {
           const tokens = doorTokens.get(bestCell.doorId) || 1.0;
           doorTokens.set(bestCell.doorId, Math.max(0, tokens - 1.0));
+          doorPassageCounts.set(bestCell.doorId, (doorPassageCounts.get(bestCell.doorId) || 0) + 1);
         }
 
         // Move to bestCell
@@ -310,10 +311,6 @@ export function runSimulation(
         agent.stepsWaiting = 0;
 
         congestionGrid[bestCell.y][bestCell.x]++;
-
-        if (bestCell.isDoor && bestCell.doorId) {
-          doorPassageCounts.set(bestCell.doorId, (doorPassageCounts.get(bestCell.doorId) || 0) + 1);
-        }
 
         // Check if new cell is exit
         if (bestCell.isExit) {

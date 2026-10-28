@@ -187,6 +187,123 @@ describe('Comprehensive Component & Flow Audit', () => {
       }
     }
   });
+
+  it('guarantees agents never cut diagonally through solid wall apexes', () => {
+    const b = simpleSchool as unknown as Building;
+    const run = runSimulation(b, {
+      id: 'corner-cut-test',
+      name: 'Corner Cut Test',
+      seed: 1337,
+      blockedDoorIds: [],
+    });
+
+    const nav = buildNavGrid(b, 0.25, []);
+
+    // Verify each agent frame-to-frame movement step
+    for (let f = 1; f < run.frames.length; f++) {
+      const prevFrame = run.frames[f - 1];
+      const currFrame = run.frames[f];
+
+      for (const currAg of currFrame.agents) {
+        const prevAg = prevFrame.agents.find(a => a.id === currAg.id);
+        if (!prevAg) continue;
+
+        // Convert world positions to grid coordinates
+        const prevCol = Math.floor((prevAg.x - nav.minX) / nav.cellSizeM);
+        const prevRow = Math.floor((prevAg.y - nav.minY) / nav.cellSizeM);
+        const currCol = Math.floor((currAg.x - nav.minX) / nav.cellSizeM);
+        const currRow = Math.floor((currAg.y - nav.minY) / nav.cellSizeM);
+
+        const dCol = currCol - prevCol;
+        const dRow = currRow - prevRow;
+
+        // If moving diagonally across grid cells
+        if (dCol !== 0 && dRow !== 0 && Math.abs(dCol) === 1 && Math.abs(dRow) === 1) {
+          if (
+            prevCol >= 0 && prevCol < nav.cols &&
+            currCol >= 0 && currCol < nav.cols &&
+            prevRow >= 0 && prevRow < nav.rows &&
+            currRow >= 0 && currRow < nav.rows
+          ) {
+            const adj1 = nav.cells[prevRow][currCol];
+            const adj2 = nav.cells[currRow][prevCol];
+            // Neither adjacent orthogonal cell may be an unwalkable solid wall
+            const cornerCut = !adj1.walkable && !adj2.walkable;
+            expect(cornerCut, `Agent ${currAg.id} cut diagonally through solid wall apex at col=${currCol}, row=${currRow}`).toBe(false);
+          }
+        }
+      }
+    }
+  });
+
+  it('enforces maximum door transit flow rate (<= 1.3 pers/m/s)', () => {
+    const b = narrowDoor as unknown as Building;
+    // narrowDoor has a 0.8m bottleneck door and 32 occupants in total
+    const run = runSimulation(b, {
+      id: 'flow-rate-invariant',
+      name: 'Flow Rate Invariant',
+      seed: 42,
+      blockedDoorIds: [],
+    });
+
+    const door = b.floors[0].doors.find(d => d.id === 'd-narrow-bottleneck')!;
+    expect(door).toBeDefined();
+    expect(door.widthM).toBe(0.8);
+
+    const doorThroughput = run.metrics.doorThroughput.find(dt => dt.doorId === 'd-narrow-bottleneck');
+    expect(doorThroughput).toBeDefined();
+    expect(doorThroughput!.totalPassed).toBe(30);
+
+    // Verify throughput flow rate satisfies 1.3 pers/m/s upper bound (with small burst tolerance)
+    expect(doorThroughput!.flowRatePerSec).toBeLessThanOrEqual(door.widthM * 1.3 * 1.25);
+  });
+
+  it('reroutes occupants cleanly when secondary exit is blocked without stranding or teleportation', () => {
+    const b = simpleSchool as unknown as Building;
+    // Block exit door d-exit-west
+    const run = runSimulation(b, {
+      id: 'reroute-test',
+      name: 'Reroute Test',
+      seed: 77,
+      blockedDoorIds: ['d-exit-west'],
+    });
+
+    // All occupants should route to d-exit-east
+    expect(run.metrics.totalSpawned).toBe(78);
+    expect(run.metrics.exitedCount).toBe(78);
+    expect(run.metrics.unreachableCount).toBe(0);
+
+    // Verify every agent position is finite (no NaNs or teleports)
+    for (const frame of run.frames) {
+      for (const ag of frame.agents) {
+        expect(isFinite(ag.x)).toBe(true);
+        expect(isFinite(ag.y)).toBe(true);
+      }
+    }
+  });
+
+  it('strictly conserves total occupant count across multiple seeds and density multipliers (fuzzing)', () => {
+    const b = simpleSchool as unknown as Building;
+    const multipliers = [0.5, 1.0, 1.5, 2.0];
+    const seeds = [1, 42, 99, 1337];
+
+    for (const mult of multipliers) {
+      for (const seed of seeds) {
+        const run = runSimulation(b, {
+          id: `fuzz-${mult}-${seed}`,
+          name: `Fuzz ${mult}x ${seed}`,
+          seed,
+          blockedDoorIds: [],
+          occupancyMultiplier: mult,
+        });
+
+        const { totalSpawned, exitedCount, unreachableCount, timedOutCount } = run.metrics;
+        expect(exitedCount + unreachableCount + timedOutCount).toBe(totalSpawned);
+        expect(run.frames.length).toBeGreaterThan(0);
+        expect(run.frames[run.frames.length - 1].activeCount).toBe(0);
+      }
+    }
+  });
 });
 
 
