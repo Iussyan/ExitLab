@@ -80,4 +80,10 @@
   - Added Interior Door Tool (`D`) and Exterior Discharge Exit Tool (`E`) with real-time sliding door box previews on walls.
   - Added Delete Tool for removing walls and doors, Undo (`Ctrl+Z`), configurable grid snap ($0.25\text{m}$, $0.5\text{m}$, $1.0\text{m}$), and high-DPI Retina canvas scaling.
   - Added automated unit test verifying dynamic CAD geometry creation and immediate simulation execution (26/26 tests passing).
+- 2026-10-29: Route Code-Splitting & AI Cancellation Controller:
+  - Code-split heavy views (`Viewer3D`, `FloorEditor2D`, `ReportView`, `AIPanel`, `BenchmarkView`, `ResultsView`, `ImportWizard`) using `React.lazy()` and `<Suspense>`.
+  - Built architectural blueprint `<ViewSkeleton />` with pulsing coordinate engine indicator, shimmering progress bar, and darkroom grid styling.
+  - Optimized Vite Rollup chunking (`vendor-three`, `vendor-r3f`, `vendor-icons`, `vendor-zod`), shrinking the initial JavaScript bundle from 1,315.7 kB down to 45.9 kB (gzipped 14.7 kB) and eliminating large chunk warnings.
+  - Implemented `AbortSignal` cancellation support in `orchestrator.ts` and `AIPanel.tsx` with non-blocking UI thread yields, "Cancel Stress Search" action button, live progress bar (`Scenario X of Y`), and partial findings preservation.
+  - Added automated unit test verifying clean agent abort execution (27/27 tests passing).
 

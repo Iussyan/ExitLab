@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Sparkles,
   Play,
@@ -13,7 +13,10 @@ import {
   FileText,
   Activity,
   Layers,
-  HelpCircle
+  HelpCircle,
+  StopCircle,
+  XCircle,
+  AlertCircle
 } from 'lucide-react';
 import { useProject } from '../../context/ProjectContext';
 import { runStressTestAgent, AgentStepTrace, Finding } from '../../agent/orchestrator';
@@ -32,17 +35,22 @@ export const AIPanel: React.FC = () => {
 
   const [budget, setBudget] = useState<number>(3);
   const [isRunning, setIsRunning] = useState<boolean>(false);
+  const [isCancelling, setIsCancelling] = useState<boolean>(false);
   const [liveTraces, setLiveTraces] = useState<AgentStepTrace[]>([]);
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const startAITest = async () => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setIsRunning(true);
+    setIsCancelling(false);
     setLiveTraces([]);
 
     try {
       const report = await runStressTestAgent(
         building,
-        { maxScenarios: budget, seed: 42, useBackendApi: true },
+        { maxScenarios: budget, seed: 42, useBackendApi: true, signal: controller.signal },
         trace => {
           setLiveTraces(prev => [...prev, trace]);
         }
@@ -51,15 +59,33 @@ export const AIPanel: React.FC = () => {
       if (report.findings.length > 0) {
         setSelectedFinding(report.findings[0]);
       }
-    } catch (err) {
-      console.error('Agent error:', err);
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || controller.signal.aborted) {
+        console.log('Agent run cancelled by user.');
+      } else {
+        console.error('Agent error:', err);
+      }
     } finally {
       setIsRunning(false);
+      setIsCancelling(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const cancelAITest = () => {
+    if (abortControllerRef.current) {
+      setIsCancelling(true);
+      abortControllerRef.current.abort();
     }
   };
 
   const activeTraces = isRunning ? liveTraces : stressTestReport?.traces || [];
   const findings = stressTestReport?.findings || [];
+
+  // Compute live progress metrics
+  const evaluatedCount = activeTraces.filter(t => t.phase === 'evaluate_metrics' && t.status === 'success').length;
+  const currentScenarioNum = Math.min(budget, evaluatedCount + (isRunning ? 1 : 0));
+  const progressPercent = Math.min(100, Math.round((evaluatedCount / budget) * 100));
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
@@ -82,14 +108,14 @@ export const AIPanel: React.FC = () => {
           </div>
 
           {/* Controls Card */}
-          <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/10 flex flex-col gap-3 shrink-0">
+          <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/10 flex flex-col gap-3 shrink-0 min-w-[280px]">
             <div className="flex items-center justify-between gap-4">
               <label className="text-xs text-slate-300 font-medium">Scenario Budget:</label>
               <select
                 value={budget}
                 onChange={e => setBudget(Number(e.target.value))}
                 disabled={isRunning}
-                className="bg-slate-800 border border-slate-700 text-white text-xs rounded-md px-2 py-1 font-semibold outline-none"
+                className="bg-slate-800 border border-slate-700 text-white text-xs rounded-md px-2 py-1 font-semibold outline-none disabled:opacity-50"
               >
                 <option value={1}>1 Scenario (Fast)</option>
                 <option value={2}>2 Scenarios</option>
@@ -99,26 +125,54 @@ export const AIPanel: React.FC = () => {
               </select>
             </div>
 
-            <button
-              onClick={startAITest}
-              disabled={isRunning}
-              className="btn-ai text-xs py-2.5 px-4 justify-center disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
-            >
-              {isRunning ? (
-                <>
-                  <Activity className="w-4 h-4 animate-spin text-purple-200" />
-                  Running Agent Loop...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  Run AI Stress Test ({budget} Scenarios)
-                </>
-              )}
-            </button>
+            {isRunning ? (
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between text-[11px] font-mono text-purple-200">
+                  <span className="flex items-center gap-1.5">
+                    <Activity className="w-3.5 h-3.5 animate-spin text-purple-300" />
+                    Scenario {currentScenarioNum} of {budget}
+                  </span>
+                  <span>{progressPercent}%</span>
+                </div>
+                {/* Live Progress Bar */}
+                <div className="w-full bg-slate-800/80 rounded-full h-2 overflow-hidden border border-purple-500/30">
+                  <div
+                    className="bg-gradient-to-r from-purple-400 via-indigo-300 to-emerald-400 h-full transition-all duration-300 ease-out"
+                    style={{ width: `${Math.max(8, progressPercent)}%` }}
+                  />
+                </div>
+                <button
+                  onClick={cancelAITest}
+                  disabled={isCancelling}
+                  className="w-full py-2 px-3 rounded-lg bg-rose-600/90 hover:bg-rose-600 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all disabled:opacity-60 cursor-pointer"
+                >
+                  <StopCircle className="w-4 h-4 animate-pulse" />
+                  {isCancelling ? 'Halting Agent...' : 'Cancel Stress Search'}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={startAITest}
+                className="btn-ai text-xs py-2.5 px-4 justify-center shadow-md cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4" />
+                Run AI Stress Test ({budget} Scenarios)
+              </button>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Cancellation Notice Banner */}
+      {stressTestReport?.isAborted && (
+        <div className="flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200 text-xs">
+          <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+          <div>
+            <strong className="text-amber-300">Stress Search Cancelled Early:</strong> Run was halted by user. The{' '}
+            <span className="font-bold underline">{findings.length} scenario finding(s)</span> completed prior to cancellation have been safely preserved below for review.
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Live Agent Activity Trace Feed */}

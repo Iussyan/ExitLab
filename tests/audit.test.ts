@@ -356,6 +356,29 @@ describe('Comprehensive Component & Flow Audit', () => {
     expect(run.metrics.exitedCount).toBe(78);
     expect(run.metrics.completed).toBe(true);
   });
+
+  it('cleanly aborts stress test agent when AbortSignal is triggered without throwing or leaking state', async () => {
+    const b = simpleSchool as unknown as Building;
+    const controller = new AbortController();
+
+    // Trigger abort after first trace arrives
+    let abortedAtStep = 0;
+    const reportPromise = runStressTestAgent(
+      b,
+      { maxScenarios: 3, seed: 42, useBackendApi: false, signal: controller.signal },
+      trace => {
+        if (trace.step >= 2 && !controller.signal.aborted) {
+          abortedAtStep = trace.step;
+          controller.abort();
+        }
+      }
+    );
+
+    const report = await reportPromise;
+    expect(report.isAborted).toBe(true);
+    expect(report.traces.some(t => t.summary.toLowerCase().includes('cancelled') || t.summary.toLowerCase().includes('aborted'))).toBe(true);
+    expect(report.baselineRun).toBeDefined();
+  });
 });
 
 

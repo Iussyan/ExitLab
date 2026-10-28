@@ -46,12 +46,14 @@ export interface StressTestReport {
   agentMode: 'meta_api' | 'autonomous_heuristic';
   assumptions: string[];
   disclaimer: string;
+  isAborted?: boolean;
 }
 
 export interface AgentConfig {
   maxScenarios: number;
   seed: number;
   useBackendApi?: boolean;
+  signal?: AbortSignal;
 }
 
 /**
@@ -145,13 +147,14 @@ export async function runStressTestAgent(
 
   // Try server-side Meta model if requested
   let agentMode: 'meta_api' | 'autonomous_heuristic' = 'autonomous_heuristic';
-  if (config.useBackendApi) {
+  if (config.useBackendApi && !config.signal?.aborted) {
     try {
       log('hypothesis', 'pending', 'Contacting Meta Model API via secure server proxy...');
       const response = await fetch('/api/agent/suggest-scenarios', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ buildingSummary: summary, budget }),
+        signal: config.signal,
       });
       if (response.ok) {
         const data = await response.json();
@@ -173,17 +176,34 @@ export async function runStressTestAgent(
       } else {
         log('hypothesis', 'skipped', 'Meta API endpoint unavailable; falling back to guarded autonomous agent');
       }
-    } catch (e) {
-      log('hypothesis', 'skipped', 'Meta API endpoint unavailable; falling back to guarded autonomous agent');
+    } catch (e: any) {
+      if (config.signal?.aborted || e?.name === 'AbortError') {
+        log('hypothesis', 'skipped', 'Stress test cancelled by user during model proposal phase');
+      } else {
+        log('hypothesis', 'skipped', 'Meta API endpoint unavailable; falling back to guarded autonomous agent');
+      }
     }
   }
 
   // 3. Iterative Agent Stress-Testing Loop
   for (let i = 0; i < budget; i++) {
+    // Check for user cancellation
+    if (config.signal?.aborted) {
+      log('evaluate_metrics', 'skipped', `Stress test cancelled by user. Preserved ${findings.length} completed finding(s).`);
+      break;
+    }
+
+    // Yield control briefly to ensure UI responsiveness and cancellation events register smoothly
+    await new Promise(r => setTimeout(r, 20));
+    if (config.signal?.aborted) {
+      log('evaluate_metrics', 'skipped', `Stress test cancelled by user. Preserved ${findings.length} completed finding(s).`);
+      break;
+    }
+
     const candidateDef = candidateScenariosToTest[i];
     const scenarioId = `scenario-stress-${i + 1}`;
 
-    log('propose_scenario', 'pending', `Agent proposing Scenario ${i + 1}: "${candidateDef.name}"`, {
+    log('propose_scenario', 'pending', `Agent proposing Scenario ${i + 1} of ${budget}: "${candidateDef.name}"`, {
       hypothesis: candidateDef.hypothesis,
       blockedDoors: candidateDef.blockedDoorIds,
     });
@@ -203,6 +223,11 @@ export async function runStressTestAgent(
     }
 
     log('validate_tool', 'success', `Scenario validated against building topology schema`);
+
+    if (config.signal?.aborted) {
+      log('evaluate_metrics', 'skipped', `Stress test cancelled by user before scenario ${i + 1} simulation.`);
+      break;
+    }
 
     // Execute deterministic simulation
     log('execute_simulation', 'pending', `Running simulation for scenario "${validation.scenario.name}"`);
@@ -264,5 +289,6 @@ export async function runStressTestAgent(
     agentMode,
     assumptions: summary.assumptions,
     disclaimer: 'ExitLab is an exploratory research and tabletop decision-support prototype. It does NOT provide certified safety advice, emergency navigation, or regulatory compliance validation.',
+    isAborted: Boolean(config.signal?.aborted),
   };
 }
