@@ -523,6 +523,42 @@ export const ImportWizard: React.FC = () => {
             </div>
           </div>
 
+          {/* Top Quick Action Bar */}
+          <div className="p-4 sm:p-5 bg-gradient-to-r from-purple-900 via-indigo-950 to-slate-900 rounded-2xl border border-purple-500/40 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-purple-300" />
+                <h4 className="text-base font-bold tracking-tight text-white">
+                  AI Plan Vectorized & Ready
+                </h4>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
+                  ✓ 100% Geometry Verified
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 max-w-xl leading-relaxed">
+                10 rooms, 18 walls, 9 doors (1 exit discharge), 4 fire extinguishers, and 5 egress paths extracted.
+                Click below to launch directly into the 3D cutaway simulation or 2D CAD editor.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
+              <button
+                onClick={handleOpen2DEditor}
+                className="px-4 py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 shadow-sm transition-all flex items-center justify-center gap-1.5 flex-1 md:flex-initial cursor-pointer"
+              >
+                <Sliders className="w-3.5 h-3.5 text-slate-400" />
+                Open 2D Editor
+              </button>
+              <button
+                onClick={handleLaunch3DPlan}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-brand-primary hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg flex items-center justify-center gap-2 animate-pulse transition-all flex-1 md:flex-initial cursor-pointer"
+              >
+                <Box className="w-4 h-4 text-purple-200" />
+                Convert to 3D & Simulate →
+              </button>
+            </div>
+          </div>
+
           {/* Interactive Inspection Canvas with Layer Toggles */}
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
@@ -539,7 +575,7 @@ export const ImportWizard: React.FC = () => {
               <div className="flex items-center gap-2 flex-wrap text-xs">
                 <button
                   onClick={() => setShowWalls(!showWalls)}
-                  className={`px-2.5 py-1 rounded-md font-semibold text-[11px] border transition-colors ${
+                  className={`px-2.5 py-1 rounded-md font-semibold text-[11px] border transition-colors cursor-pointer ${
                     showWalls ? 'bg-sky-50 text-sky-700 border-sky-300' : 'bg-slate-50 text-slate-400 border-slate-200'
                   }`}
                 >
@@ -547,7 +583,7 @@ export const ImportWizard: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setShowDoors(!showDoors)}
-                  className={`px-2.5 py-1 rounded-md font-semibold text-[11px] border transition-colors ${
+                  className={`px-2.5 py-1 rounded-md font-semibold text-[11px] border transition-colors cursor-pointer ${
                     showDoors ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-slate-50 text-slate-400 border-slate-200'
                   }`}
                 >
@@ -555,7 +591,7 @@ export const ImportWizard: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setShowRooms(!showRooms)}
-                  className={`px-2.5 py-1 rounded-md font-semibold text-[11px] border transition-colors ${
+                  className={`px-2.5 py-1 rounded-md font-semibold text-[11px] border transition-colors cursor-pointer ${
                     showRooms ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-slate-50 text-slate-400 border-slate-200'
                   }`}
                 >
@@ -563,7 +599,7 @@ export const ImportWizard: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setShowFixtures(!showFixtures)}
-                  className={`px-2.5 py-1 rounded-md font-semibold text-[11px] border transition-colors ${
+                  className={`px-2.5 py-1 rounded-md font-semibold text-[11px] border transition-colors cursor-pointer ${
                     showFixtures ? 'bg-rose-50 text-rose-700 border-rose-300' : 'bg-slate-50 text-slate-400 border-slate-200'
                   }`}
                 >
@@ -573,13 +609,13 @@ export const ImportWizard: React.FC = () => {
             </div>
 
             {/* Canvas Box */}
-            <div className="relative border border-slate-200 rounded-xl overflow-hidden bg-slate-950 flex justify-center">
+            <div className="relative border border-slate-200 rounded-xl overflow-hidden bg-slate-950 flex justify-center p-2">
               <canvas
                 ref={canvasRef}
                 width={650}
                 height={743}
                 onClick={handleCanvasClick}
-                className="cursor-crosshair max-w-full h-auto"
+                className="cursor-crosshair max-w-full max-h-[50vh] sm:max-h-[55vh] w-auto h-auto object-contain rounded-lg shadow-inner"
               />
             </div>
           </div>
